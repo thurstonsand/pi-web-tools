@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## 0.1.1
 
-- Initial extraction of the Pi web tools package.
-- Added GitHub issue and pull request listing support for `web_fetch`.
+First release of `pi-web-tools`.
+
+### Added
+
+- `web_fetch` and `web_search` tools for pi, with a GitHub/Parallel/local fetcher chain.
+- `/open-browser` command for authenticated local browsing.
