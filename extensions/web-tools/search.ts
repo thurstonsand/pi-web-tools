@@ -59,7 +59,7 @@ const webSearchParameters = Type.Object({
   after_date: Type.Optional(
     Type.String({
       description:
-        "Optional freshness filter. Only include results published on or after this RFC 3339 date (YYYY-MM-DD).",
+        "Only include results published on or after this RFC 3339 date (YYYY-MM-DD). Set it when recent results matter.",
     }),
   ),
 });
@@ -68,13 +68,8 @@ export const webSearchTool: ToolDefinition<typeof webSearchParameters, WebSearch
   name: "web_search",
   label: "Search Web",
   description: "Search the web and return relevant results with excerpts.",
-  promptSnippet:
-    "Use when you need to discover relevant public web sources or check current external information.",
-  promptGuidelines: [
-    "Prefer a focused objective and 1-5 specific search queries.",
-    "Set after_date when recent results matter.",
-    "Use web_fetch when you already have a specific URL and need more than search snippets.",
-  ],
+  promptSnippet: "Search the web for sources and current information",
+  promptGuidelines: ["Prefer a focused objective and 1-5 specific queries for web_search."],
   parameters: webSearchParameters,
   execute: async (_toolCallId, params, _signal, onUpdate) => {
     const searchQueries = normalizeSearchQueries(params.search_queries, params.objective);

@@ -41,11 +41,10 @@ export function createWebFetchTool(
     label: "Fetch Web",
     description:
       "Fetch specific URLs. Every document's content is written as native files (markdown, patches, source files) under a per-call artifact directory; the tool result is a digest with per-document facts, file paths, and a short excerpt.",
-    promptSnippet:
-      "Use when you already have a specific URL and need the page contents or source-native artifacts.",
+    promptSnippet: "Fetch contents of URLs",
     promptGuidelines: [
-      "Fetch GitHub URLs into structured responses: issues, PRs, repos, individual files, and directories.",
-      "Repo issue/PR lists and searches are fetchable via github.com/{owner}/{repo}/issues or /pulls, optionally with ?q= in GitHub search syntax.",
+      "Use web_fetch on GitHub URLs for structured responses: issues, PRs, repos, individual files, directories, and repo-level issue and PR lists (including `?q=` GitHub search syntax).",
+      "Use web_fetch when you already have a specific URL and need more than search snippets.",
     ],
     parameters: webFetchParameters,
     execute: async (_toolCallId, params, signal, onUpdate, ctx) => {
