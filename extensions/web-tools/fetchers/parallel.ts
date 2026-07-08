@@ -1,4 +1,4 @@
-import Parallel from "parallel-web";
+import type ParallelClient from "parallel-web";
 import type { FetchedDocument, FetchWarning, WebFetcher } from "../contract.ts";
 import { formatWarnings, writeDocumentBody } from "../shared.ts";
 
@@ -7,11 +7,24 @@ export const DEFAULT_SEARCH_MODE: "basic" | "advanced" = "advanced";
 export const DEFAULT_MAX_RESULTS = 5;
 export const MAX_MAX_RESULTS = 8;
 
+export type ParallelConstructor = typeof import("parallel-web").default;
+
+// parallel-web is an optional dependency. A dynamic import keeps the extension
+// loadable when the SDK is absent; callers treat null as "no Parallel backend".
+export async function loadParallelConstructor(): Promise<ParallelConstructor | null> {
+  try {
+    const { default: Parallel } = await import("parallel-web");
+    return Parallel;
+  } catch {
+    return null;
+  }
+}
+
 export function hasParallelApiKey(): boolean {
   return Boolean(process.env[API_KEY_ENV]);
 }
 
-export function getParallelClient(): Parallel {
+export function createParallelClient(Parallel: ParallelConstructor): ParallelClient {
   const apiKey = process.env[API_KEY_ENV];
   if (!apiKey) {
     throw new Error(`${API_KEY_ENV} is not set`);
@@ -121,12 +134,12 @@ export type ParallelFetchError = {
   content?: string | null;
 };
 
-export function createParallelFetcher(): WebFetcher {
+export function createParallelFetcher(Parallel: ParallelConstructor): WebFetcher {
   return {
     source: "parallel",
     canFetch: () => hasParallelApiKey(),
     async fetch({ urls, objective, artifactDir }) {
-      const client = getParallelClient();
+      const client = createParallelClient(Parallel);
       const result = await client.extract({
         urls,
         ...(objective ? { objective } : {}),

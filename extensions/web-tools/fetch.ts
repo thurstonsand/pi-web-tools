@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { FetchWarning, UrlOutcome, WebFetcher } from "./contract.ts";
@@ -33,10 +33,8 @@ const webFetchParameters = Type.Object({
   ),
 });
 
-export function createWebFetchTool(
-  fetchers: WebFetcher[],
-): ToolDefinition<typeof webFetchParameters, WebFetchDetails> {
-  return {
+export function createWebFetchTool(fetchers: WebFetcher[]) {
+  return defineTool({
     name: "web_fetch",
     label: "Fetch Web",
     description:
@@ -55,7 +53,7 @@ export function createWebFetchTool(
             text: `Fetching ${params.urls.length} URL(s) from the web...`,
           },
         ],
-        details: {},
+        details: {} satisfies WebFetchDetails,
       });
 
       try {
@@ -69,7 +67,7 @@ export function createWebFetchTool(
             resolved: delivery.resolved,
             failed: delivery.failed,
             warnings: result.warnings.length > 0 ? result.warnings : null,
-          },
+          } satisfies WebFetchDetails,
         };
       } catch (error) {
         throw new Error(`web_fetch failed: ${getErrorMessage(error)}`);
@@ -140,5 +138,5 @@ export function createWebFetchTool(
 
       return new Text(text, 0, 0);
     },
-  };
+  });
 }

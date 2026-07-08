@@ -40,6 +40,7 @@ pi -e /Users/thurstonsand/Develop/pi-web-tools
 ## Gotchas
 
 - Browser-driver import trees crash pi's host loader (bun + jiti). `playwright-core` is imported only by `fetchers/local/fetch-worker.ts`, which runs as a standalone `node` process.
+- `parallel-web` is an `optionalDependency`, dynamically loaded once in `parallel.ts`.
 
 ## Project structure
 
