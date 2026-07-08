@@ -6,7 +6,7 @@ import { deliverFetchResults } from "./delivery.ts";
 import { fetchDocuments } from "./router.ts";
 import { formatWarnings, getErrorMessage } from "./shared.ts";
 
-type FetchWebDetails = {
+type WebFetchDetails = {
   count?: number;
   artifactRoot?: string;
   resolved?: UrlOutcome[];
@@ -20,7 +20,7 @@ type RenderableToolResult<TDetails> = {
   isError?: boolean;
 };
 
-const fetchWebParameters = Type.Object({
+const webFetchParameters = Type.Object({
   urls: Type.Array(Type.String({ description: "A URL to extract." }), {
     description: "One or more URLs to extract.",
     minItems: 1,
@@ -33,21 +33,21 @@ const fetchWebParameters = Type.Object({
   ),
 });
 
-export function createFetchWebTool(
+export function createWebFetchTool(
   fetchers: WebFetcher[],
-): ToolDefinition<typeof fetchWebParameters, FetchWebDetails> {
+): ToolDefinition<typeof webFetchParameters, WebFetchDetails> {
   return {
-    name: "fetch_web",
+    name: "web_fetch",
     label: "Fetch Web",
     description:
       "Fetch specific URLs. Every document's content is written as native files (markdown, patches, source files) under a per-call artifact directory; the tool result is a digest with per-document facts, file paths, and a short excerpt.",
     promptSnippet:
       "Use when you already have a specific URL and need the page contents or source-native artifacts.",
     promptGuidelines: [
-      "GitHub URLs use a source-native fetcher: issues, PRs, repos, individual files, and directories return structured responses.",
-      "Repo issue/PR lists and searches are fetchable via github.com/{owner}/{repo}/issues or /pulls, optionally with ?q= in GitHub search syntax, returning up to 100 matches.",
+      "Fetch GitHub URLs into structured responses: issues, PRs, repos, individual files, and directories.",
+      "Repo issue/PR lists and searches are fetchable via github.com/{owner}/{repo}/issues or /pulls, optionally with ?q= in GitHub search syntax.",
     ],
-    parameters: fetchWebParameters,
+    parameters: webFetchParameters,
     execute: async (_toolCallId, params, signal, onUpdate, ctx) => {
       onUpdate?.({
         content: [
@@ -73,11 +73,11 @@ export function createFetchWebTool(
           },
         };
       } catch (error) {
-        throw new Error(`fetch_web failed: ${getErrorMessage(error)}`);
+        throw new Error(`web_fetch failed: ${getErrorMessage(error)}`);
       }
     },
     renderCall(args, theme, context) {
-      let text = theme.fg("toolTitle", theme.bold("fetch_web"));
+      let text = theme.fg("toolTitle", theme.bold("web_fetch"));
 
       if (context.isPartial) {
         const primaryUrl = args.urls.find((url: string) => url.trim())?.trim() ?? "";
@@ -94,7 +94,7 @@ export function createFetchWebTool(
       return new Text(text, 0, 0);
     },
     renderResult(result, { expanded, isPartial }, theme, context) {
-      const renderedResult = result as RenderableToolResult<FetchWebDetails>;
+      const renderedResult = result as RenderableToolResult<WebFetchDetails>;
       if (isPartial) return new Text(theme.fg("warning", "Fetching..."), 0, 0);
       if (context.isError) {
         const text =
@@ -104,7 +104,7 @@ export function createFetchWebTool(
         return new Text(theme.fg("error", text), 0, 0);
       }
 
-      const details = (renderedResult.details ?? {}) as FetchWebDetails;
+      const details = (renderedResult.details ?? {}) as WebFetchDetails;
       const count = details.count ?? details.resolved?.length ?? 0;
       let text = theme.fg("success", `${count} document${count === 1 ? "" : "s"} fetched`);
       if (details.artifactRoot) text += `\n${theme.fg("dim", details.artifactRoot)}`;

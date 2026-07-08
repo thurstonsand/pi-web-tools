@@ -8,11 +8,11 @@ Accepted
 
 ## Decision Summary
 
-`fetch_web` gains a terminal **local fetcher**: a singleton worker process driving the system-installed Chrome via `playwright-core`, with trafilatura extraction behind a swappable seam. The fetcher chain becomes `[github, parallel, local]` unconditionally — Parallel's availability (key present) is expressed at claim time via `canFetch`, so a missing key or a Parallel outage both cascade per-URL to the local backend. The key tradeoff: a resident browser worker and a hard requirement on a system browser, in exchange for a Parallel-free, authentication-capable fetch path on every machine — including the work machine, where Parallel is not allowed at all.
+`web_fetch` gains a terminal **local fetcher**: a singleton worker process driving the system-installed Chrome via `playwright-core`, with trafilatura extraction behind a swappable seam. The fetcher chain becomes `[github, parallel, local]` unconditionally — Parallel's availability (key present) is expressed at claim time via `canFetch`, so a missing key or a Parallel outage both cascade per-URL to the local backend. The key tradeoff: a resident browser worker and a hard requirement on a system browser, in exchange for a Parallel-free, authentication-capable fetch path on every machine — including the work machine, where Parallel is not allowed at all.
 
 ## Problem Statement / Background
 
-The work machine cannot use Parallel. Today that means `fetch_web`'s terminal fetcher is dead there: any URL the GitHub fetcher doesn't claim has no resolution path. The interim answer was a fork of [pi-web-fetch](https://github.com/georgebashi/pi-web-fetch) registered as a separate pi package at work — which surfaced the constraints this design must honor:
+The work machine cannot use Parallel. Today that means `web_fetch`'s terminal fetcher is dead there: any URL the GitHub fetcher doesn't claim has no resolution path. The interim answer was a fork of [pi-web-fetch](https://github.com/georgebashi/pi-web-fetch) registered as a separate pi package at work — which surfaced the constraints this design must honor:
 
 - **The pi host process cannot import a browser driver.** At work, pi runs under bun and its extension loader resolves the extension's import graph through jiti with `tryNative: false`. Puppeteer's transitive import tree hard-crashed the host. The fork's fix — browser automation in a separate worker process spawned with `node`, speaking newline-delimited JSON — is the load-bearing architecture, not a workaround, and it is driver-agnostic: playwright's import tree is the same class of hazard.
 - **Authenticated fetching matters.** The fork added a persistent isolated Chrome profile and an `/open-browser` command to log into sites interactively (SSO'd internal pages Parallel could never reach). Retiring the fork without losing this means the login flow is in scope.
@@ -22,7 +22,7 @@ Concrete scenario: at work, the agent is asked to check an internal Confluence p
 
 ## Goals
 
-- `fetch_web` resolves any public (and, with a logged-in profile, authenticated) web page with no Parallel dependency, on every deploy target.
+- `web_fetch` resolves any public (and, with a logged-in profile, authenticated) web page with no Parallel dependency, on every deploy target.
 - Parallel failures — missing key, outage, per-URL extraction errors — cascade to the local fetcher instead of failing the URL.
 - The local fetcher conforms fully to the design-01 contract: always-materialize, digest-only tool result, provider-authored excerpt.
 - No browser-driver code is ever imported by the pi host process.
@@ -32,7 +32,7 @@ Concrete scenario: at work, the agent is asked to check an internal Confluence p
 
 ## Non-Goals
 
-- No local `search_web` backend. Without `PARALLEL_API_KEY`, `search_web` is simply not registered.
+- No local `web_search` backend. Without `PARALLEL_API_KEY`, `web_search` is simply not registered.
 - No `objective` steering in the local fetcher; that remains deferred to design 01's Phase 3 ephemeral-session direction.
 - No fetch cache. Always-materialize already leaves stable artifacts; the fork's 15-minute cache served a re-prompt workflow this contract doesn't have.
 - No managed/downloaded browsers. The system browser is required (see Decision 3).
@@ -87,7 +87,7 @@ The chain is `[github, parallel, local]` on every machine, composed once in `web
 
 The local fetcher claims `http(s)` URLs only; other schemes go unclaimed and surface in the Failed section. URLs are passed to the browser as-is — no `http`→`https` rewriting; the browser's own upgrade behavior applies.
 
-`search_web` registration in `web-tools.ts` remains gated on the key: without Parallel there is no search backend, and an unregistered tool is more honest than a permanently erroring one.
+`web_search` registration in `web-tools.ts` remains gated on the key: without Parallel there is no search backend, and an unregistered tool is more honest than a permanently erroring one.
 
 ### 2. Router throw-isolation
 
@@ -203,9 +203,9 @@ The profile lives at `~/.pi/agent/browser-profile/` (settings-overridable), isol
 ## Implementation Plan
 
 - [x] Phase 1: Router throw-isolation and claim-time Parallel availability
-  - Goal: The cascade survives a throwing fetcher; a missing `PARALLEL_API_KEY` produces clean per-URL failures instead of killing the tool call; `search_web` is not registered without the key. Independently shippable — on a keyless machine, `fetch_web` degrades to GitHub-only with honest Failed entries rather than crashing.
+  - Goal: The cascade survives a throwing fetcher; a missing `PARALLEL_API_KEY` produces clean per-URL failures instead of killing the tool call; `web_search` is not registered without the key. Independently shippable — on a keyless machine, `web_fetch` degrades to GitHub-only with honest Failed entries rather than crashing.
   - Files: `router.ts`, `fetchers/parallel.ts`, `web-tools.ts`.
-  - Work: Wrap `fetcher.fetch()` in the router; a throw becomes a `FailedAttempt` for every URL in that fetcher's claimed batch. Parallel's `canFetch` returns key presence. `web-tools.ts` registers `search_web` only when the key is set.
+  - Work: Wrap `fetcher.fetch()` in the router; a throw becomes a `FailedAttempt` for every URL in that fetcher's claimed batch. Parallel's `canFetch` returns key presence. `web-tools.ts` registers `web_search` only when the key is set.
   - Validation: `uv run poe lint:pi`. Smoke with `PARALLEL_API_KEY` unset: a GitHub URL resolves normally; a plain web URL lands in the Failed section with a `parallel` attempt absent (unclaimed) and no crash; with the key set, behavior is unchanged.
 
 - [x] Phase 2: Settings module, fetch worker, and the headless local fetcher

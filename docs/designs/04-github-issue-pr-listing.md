@@ -6,11 +6,11 @@ Accepted
 
 ## Decision Summary
 
-`fetch_web` learns two new GitHub URL shapes — `github.com/{owner}/{repo}/issues` and `/pulls`, with an optional `?q=` in GitHub's search syntax — resolved natively through the Search API into a capped listing document. Listing and search are deliberately one feature: GitHub's own list pages carry their entire query language in the URL, so one resolver backed by `GET /search/issues` covers both. The tradeoff accepted: search has its own, tighter rate-limit bucket, and results cap at one API page (100), pushing the agent to refine queries rather than paginate.
+`web_fetch` learns two new GitHub URL shapes — `github.com/{owner}/{repo}/issues` and `/pulls`, with an optional `?q=` in GitHub's search syntax — resolved natively through the Search API into a capped listing document. Listing and search are deliberately one feature: GitHub's own list pages carry their entire query language in the URL, so one resolver backed by `GET /search/issues` covers both. The tradeoff accepted: search has its own, tighter rate-limit bucket, and results cap at one API page (100), pushing the agent to refine queries rather than paginate.
 
 ## Problem Statement / Background
 
-Doc 01 gave `fetch_web` native resolvers for single issues and PRs, but a bare list URL (`github.com/owner/repo/issues`) falls through `parseGitHubUrl` unclaimed and cascades to Parallel or the local browser — an HTML scrape of a client-side-rendered page, the exact failure mode doc 01 exists to eliminate. `pulls` isn't recognized as a marker at all. The agent has no native way to answer "what's open in this repo?" or "find the issue about X" without already knowing the number.
+Doc 01 gave `web_fetch` native resolvers for single issues and PRs, but a bare list URL (`github.com/owner/repo/issues`) falls through `parseGitHubUrl` unclaimed and cascades to Parallel or the local browser — an HTML scrape of a client-side-rendered page, the exact failure mode doc 01 exists to eliminate. `pulls` isn't recognized as a marker at all. The agent has no native way to answer "what's open in this repo?" or "find the issue about X" without already knowing the number.
 
 Concrete scenario: the agent is debugging a dependency and wants open issues mentioning a symptom. Today it must scrape or guess issue numbers. With this design it fetches `github.com/dep/repo/issues?q=extraction+failed` and receives a table of matches with numbers, titles, and URLs — each row chaining naturally into the existing single-issue resolver.
 
@@ -28,7 +28,7 @@ Timing note: GitHub's search migration to "advanced search" completed September 
 - No global search (`github.com/search?q=…`) — deferred until a real need appears; the API call is identical, only the `repo:` qualifier is absent.
 - No pagination past 100 results; the digest reports the total so the agent narrows the query instead.
 - No `sort:` translation into API `sort`/`order` parameters — the qualifier works inside `q` (verified live: `sort:created-asc` and `sort:comments-desc` reorder results as expected).
-- No `search_web` involvement; this is a `fetch_web` URL shape per doc 01's routing model.
+- No `web_search` involvement; this is a `web_fetch` URL shape per doc 01's routing model.
 
 ## Exposed Shape
 
@@ -57,7 +57,7 @@ Document shape (`github.issue_list` / `github.pull_request_list` by tab):
 
 ### 1. URL shapes, not a new tool
 
-Listing rides the existing `fetch_web` contract as a new internal resolver, per doc 01's "new shape = new resolver" rule. Agents already produce these URLs naturally; a dedicated `search_github` tool would duplicate the GitHub entry point and contradict doc 01's non-goal of keeping search routing out of the tool surface.
+Listing rides the existing `web_fetch` contract as a new internal resolver, per doc 01's "new shape = new resolver" rule. Agents already produce these URLs naturally; a dedicated `search_github` tool would duplicate the GitHub entry point and contradict doc 01's non-goal of keeping search routing out of the tool surface.
 
 ### 2. Search API as the sole backend
 

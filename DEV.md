@@ -43,6 +43,6 @@ pi -e /Users/thurstonsand/Develop/pi-web-tools
 
 ## Project structure
 
-- entry: `extensions/web-tools.ts` — composes GitHub auth + the `[github, parallel, local]` fetcher chain, registers `fetch_web`/`search_web` tools and `/open-browser` command
+- entry: `extensions/web-tools.ts` — composes GitHub auth + the `[github, parallel, local]` fetcher chain, registers `web_fetch`/`web_search` tools and `/open-browser` command
 - core: `extensions/web-tools/` — `contract.ts` (cross-module types), `router.ts` (claim-and-cascade), `delivery.ts` (digest rendering), `settings.ts`
 - fetchers: `extensions/web-tools/fetchers/`

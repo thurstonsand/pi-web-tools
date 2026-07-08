@@ -24,7 +24,7 @@ type SearchWarning = {
   type?: string | null;
 };
 
-type SearchWebDetails = {
+type WebSearchDetails = {
   objective?: string;
   count?: number;
   results?: SearchResultItem[];
@@ -37,7 +37,7 @@ type RenderableToolResult<TDetails> = {
   isError?: boolean;
 };
 
-const searchWebParameters = Type.Object({
+const webSearchParameters = Type.Object({
   objective: Type.String({
     description: "What you want to learn from the web search.",
   }),
@@ -64,8 +64,8 @@ const searchWebParameters = Type.Object({
   ),
 });
 
-export const searchWebTool: ToolDefinition<typeof searchWebParameters, SearchWebDetails> = {
-  name: "search_web",
+export const webSearchTool: ToolDefinition<typeof webSearchParameters, WebSearchDetails> = {
+  name: "web_search",
   label: "Search Web",
   description: "Search the web and return relevant results with excerpts.",
   promptSnippet:
@@ -73,9 +73,9 @@ export const searchWebTool: ToolDefinition<typeof searchWebParameters, SearchWeb
   promptGuidelines: [
     "Prefer a focused objective and 1-5 specific search queries.",
     "Set after_date when recent results matter.",
-    "Use fetch_web when you already have a specific URL and need more than search snippets.",
+    "Use web_fetch when you already have a specific URL and need more than search snippets.",
   ],
-  parameters: searchWebParameters,
+  parameters: webSearchParameters,
   execute: async (_toolCallId, params, _signal, onUpdate) => {
     const searchQueries = normalizeSearchQueries(params.search_queries, params.objective);
 
@@ -121,7 +121,7 @@ export const searchWebTool: ToolDefinition<typeof searchWebParameters, SearchWeb
       0,
     );
 
-    let text = theme.fg("toolTitle", theme.bold("search_web "));
+    let text = theme.fg("toolTitle", theme.bold("web_search "));
     text += theme.fg("muted", primaryQuery);
     if (extraQueries > 0) {
       text += theme.fg("dim", ` +${extraQueries} more`);
@@ -129,7 +129,7 @@ export const searchWebTool: ToolDefinition<typeof searchWebParameters, SearchWeb
     return new Text(text, 0, 0);
   },
   renderResult(result, { expanded, isPartial }, theme, context) {
-    const renderedResult = result as RenderableToolResult<SearchWebDetails>;
+    const renderedResult = result as RenderableToolResult<WebSearchDetails>;
     if (isPartial) {
       return new Text(theme.fg("warning", "Searching..."), 0, 0);
     }
@@ -141,7 +141,7 @@ export const searchWebTool: ToolDefinition<typeof searchWebParameters, SearchWeb
       return new Text(theme.fg("error", text), 0, 0);
     }
 
-    const details = (renderedResult.details ?? {}) as SearchWebDetails;
+    const details = (renderedResult.details ?? {}) as WebSearchDetails;
     const count = details.count ?? details.results?.length ?? 0;
     let text = theme.fg("success", `${count} result${count === 1 ? "" : "s"}`);
     const warningLines = formatWarnings(details.warnings);

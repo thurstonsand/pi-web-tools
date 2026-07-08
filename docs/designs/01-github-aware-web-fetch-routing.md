@@ -8,11 +8,11 @@ Draft
 
 ## Decision Summary
 
-`fetch_web` becomes a source-routed fetch tool: an ordered chain of source fetchers resolves each URL, with GitHub served natively through Octokit and Parallel as the terminal fallback. Every source materializes its results as named native-format files on disk — fetchers own disk writes — and the tool result is a compact digest per document: facts, file paths with sizes, and a capped excerpt. Content is never inlined into the tool result. The key tradeoff is accepted deliberately: even a small document costs a follow-up read, in exchange for a uniform model, stable re-greppable artifacts, a context window that holds only what the agent chose to read, and a contract that scales to repository-sized retrieval.
+`web_fetch` becomes a source-routed fetch tool: an ordered chain of source fetchers resolves each URL, with GitHub served natively through Octokit and Parallel as the terminal fallback. Every source materializes its results as named native-format files on disk — fetchers own disk writes — and the tool result is a compact digest per document: facts, file paths with sizes, and a capped excerpt. Content is never inlined into the tool result. The key tradeoff is accepted deliberately: even a small document costs a follow-up read, in exchange for a uniform model, stable re-greppable artifacts, a context window that holds only what the agent chose to read, and a contract that scales to repository-sized retrieval.
 
 ## Problem Statement / Background
 
-The consumer of `fetch_web` output is a coding agent. Its reading tools are line-oriented — read with offsets, grep, standard diff tooling — and its context budget is the scarcest resource in a session. Delivery must therefore answer two questions well: is the content in a form those tools can operate on, and does the tool result carry enough signal to decide what is worth reading?
+The consumer of `web_fetch` output is a coding agent. Its reading tools are line-oriented — read with offsets, grep, standard diff tooling — and its context budget is the scarcest resource in a session. Delivery must therefore answer two questions well: is the content in a form those tools can operate on, and does the tool result carry enough signal to decide what is worth reading?
 
 Two failure patterns motivate this design:
 
@@ -25,7 +25,7 @@ The routing layer must also be ready for more source fetchers — GitLab is the 
 
 ## Goals
 
-- Route `fetch_web` URLs through source-native APIs when a source fetcher claims them, falling back to Parallel for everything else.
+- Route `web_fetch` URLs through source-native APIs when a source fetcher claims them, falling back to Parallel for everything else.
 - Deliver all results through one source-agnostic contract: a digest in the tool result, native-format files on disk.
 - Materialize every document's content as files, unconditionally; never inline content into the tool result.
 - Support GitHub files, repo README, directory listings, issues, and pull requests (including diffs) in the first GitHub fetcher.
@@ -34,7 +34,7 @@ The routing layer must also be ready for more source fetchers — GitLab is the 
 
 ## Non-Goals
 
-- No `search_web` routing; it remains Parallel-only.
+- No `web_search` routing; it remains Parallel-only.
 - No GitHub Enterprise host support.
 - No recursive directory/repo content fetching by default; tree URLs list entries only.
 - No model-generated summaries in the initial implementation (deferred; see Phase 3).
@@ -53,7 +53,7 @@ The routing layer must also be ready for more source fetchers — GitLab is the 
 
 ### Tool result
 
-The tool result is plain text: one digest per document, no content. Example for `fetch_web(urls: ["https://github.com/octokit/rest.js/pull/607", "https://github.com/octokit/rest.js/issues/1"])`:
+The tool result is plain text: one digest per document, no content. Example for `web_fetch(urls: ["https://github.com/octokit/rest.js/pull/607", "https://github.com/octokit/rest.js/issues/1"])`:
 
 ```
 1. octokit/rest.js#607: build(deps): Bump http-proxy-middleware…
@@ -253,12 +253,12 @@ extensions/web-tools/
   router.ts               — claim-and-cascade routing over per-URL outcomes
   delivery.ts             — pure digest/Failed-section formatter over routed outcomes
   shared.ts               — cross-tool string/format helpers (used by search.ts too)
-  fetch.ts                — createFetchWebTool(fetchers) tool factory + TUI rendering
-  search.ts               — search_web (unchanged behavior)
+  fetch.ts                — createWebFetchTool(fetchers) tool factory + TUI rendering
+  search.ts               — web_search (unchanged behavior)
   fetchers/
     github/               — GitHub fetcher: Octokit, URL parsing, resolvers, rendering
     github/auth.ts        — GitHubAuth token resolution, cached, injected via web-tools.ts
-    parallel.ts           — Parallel client + fetcher (search_web helpers included)
+    parallel.ts           — Parallel client + fetcher (web_search helpers included)
 ```
 
 The rule that matters: providers import from `contract.ts`/`shared.ts` only. No provider imports from a sibling provider or from the router, so `fetchers/gitlab.ts` starts clean.
@@ -352,7 +352,7 @@ When source-native fetches get large — a whole PR, later a whole repository tr
   - Validation: Public-repo smoke tests for small and truncated trees.
 
 - [ ] Phase 5 (deferred): Parallel session continuity via `session_id`
-  - Goal: Determine whether passing Parallel's optional `session_id` ("track calls across separate search and extract calls… may give better contextual results") measurably improves `search_web` → `fetch_web` workflows, and wire it if so.
+  - Goal: Determine whether passing Parallel's optional `session_id` ("track calls across separate search and extract calls… may give better contextual results") measurably improves `web_search` → `web_fetch` workflows, and wire it if so.
   - Files: `fetchers/parallel.ts`, `search.ts`, possibly `contract.ts` if the session handle needs to cross the tool boundary.
   - Work: Investigate first — what scope should a session cover (one pi session? one search-then-fetch chain?), where the identifier lives, and whether extract results actually differ with it. Only then plumb it through both tools.
   - Validation: Side-by-side extract results with and without `session_id` on a search-then-fetch sequence; adopt only if the difference is real.

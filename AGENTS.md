@@ -2,11 +2,11 @@
 
 pi-web-tools brings the web access tools missing from the pi coding agent.
 
-## `search_web`
+## `web_search`
 
-Backed by [Parallel Web Systems](https://parallel.ai/), `search_web` brings web search with output optimized for agent consumption.
+Backed by [Parallel Web Systems](https://parallel.ai/), `web_search` brings web search with output optimized for agent consumption.
 
-## `fetch_web`
+## `web_fetch`
 
 Retrieve a full webpage using a flexible backend fetching router that chooses the best fetcher for the job:
 

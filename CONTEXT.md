@@ -1,6 +1,6 @@
 # Context
 
-- **Web tools**: The two tools this package registers with pi: `fetch_web` and `search_web`.
+- **Web tools**: The two tools this package registers with pi: `web_fetch` and `web_search`.
 - **Fetcher**: A fetch backend for one source (`github`, `parallel`, `local`).
 - **Document**: The result of resolving one URL: digest fields plus one or more bodies on disk.
 - **Digest**: The description of a document in the tool result — title, facts, link, body files with sizes, capped excerpt.

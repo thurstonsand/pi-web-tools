@@ -21,7 +21,7 @@ The sibling repos (`pi-sessions`, `pi-permissions`, `pi-librarian`) already solv
 - `github.ts` is decomposed by resolver concern under a `github/` folder.
 - All web-tools design docs live in this repo; ansiblonomicon's copies are removed.
 - Every current consumer keeps working after cutover: macOS loads the dev checkout, OpenClaw installs from npm.
-- Tool names (`fetch_web`, `search_web`), the `webTools` settings key, and runtime behavior are unchanged — this is a relocation and reorganization, not a rewrite.
+- Tool names (`web_fetch`, `web_search`), the `webTools` settings key, and runtime behavior are unchanged — this is a relocation and reorganization, not a rewrite.
 
 ## Non-Goals
 
@@ -162,7 +162,7 @@ All ansiblonomicon edits land as one reviewable change once `v0.1.0` exists on n
   - Goal: Ansiblonomicon consumes the new package everywhere; the chezmoi copy is gone.
   - Files: `chezmoi/private_dot_pi/agent/settings.json.tmpl`, `chezmoi/private_dot_pi/agent/extensions/parallel-web-tools/` (deleted), `ansible/openclaw.config.yml`, `scripts/pi-lint.sh`, `docs/designs/17-*.md`/`18-*.md` (deleted).
   - Work: Apply the Decision 7 edit list as one change.
-  - Validation: `uv run poe lint` green; `uv run poe cz-diff` shows the extension dir removal + settings line; `chezmoi apply` locally, restart pi, confirm `fetch_web`/`search_web` register once from the dev checkout; `uv run poe openclaw --check` clean.
+  - Validation: `uv run poe lint` green; `uv run poe cz-diff` shows the extension dir removal + settings line; `chezmoi apply` locally, restart pi, confirm `web_fetch`/`web_search` register once from the dev checkout; `uv run poe openclaw --check` clean.
 
 - [ ] Phase 5: Issue/PR listing feature
   - Goal: Implement `docs/designs/04-github-issue-pr-listing.md` in the new structure.

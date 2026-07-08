@@ -1,8 +1,11 @@
 # @thurstonsand/pi-web-tools
 
-Pi extension package for `search_web` and `fetch_web`.
+Web access for the [pi](https://github.com/earendil-works/pi) coding agent. This package registers two tools:
 
-`fetch_web` routes GitHub URLs through source-native resolvers for repositories, files, directories, issues, pull requests, and issue/PR listings. Other pages fall back through Parallel and the local browser fetcher.
+- `web_search` — web search with results shaped for agent consumption.
+- `web_fetch` — resolve a URL to a document, picking the best backend for the source.
+
+Agents make better decisions with live information. The goal here is to make reaching for it cheap, and to present each source in the form an agent can actually use.
 
 ## Install
 
@@ -16,15 +19,61 @@ For local development from a clone:
 pi -e ./extensions/web-tools.ts
 ```
 
-## Tools
+## Configuration
 
-- `search_web`: Parallel-backed web search.
-- `fetch_web`: URL fetch with GitHub-native artifacts, Parallel extraction, and local browser fallback.
+| What             | Source                              | Required   |
+| ---------------- | ----------------------------------- | ---------- |
+| Parallel API key | `PARALLEL_API_KEY`                  | for search |
+| GitHub token     | `GH_TOKEN`, token file, or `gh` CLI | no         |
+| Fetch browser    | pi global settings                  | no         |
+
+- **Parallel API key** enables `web_search` and the Parallel fetch backend. Without it, `web_search` is not registered and fetches fall through to the local browser.
+- **GitHub token** raises rate limits and reaches private repos. Resolved from `GH_TOKEN`, then `~/.pi/agent/github-token`, then `gh auth token`. Public URLs work without it.
+- **Fetch browser** settings live under `webTools.fetch.browser` (`executablePath`, `profileDir`). They point the local browser at a specific Chrome binary and profile, defaulting to a managed profile under `~/.pi/agent/browser-profile`.
+
+## `web_search`
+
+Backed by [Parallel](https://parallel.ai/). It takes an objective and returns results with excerpts.
+
+Parameters:
+
+- `objective` (required) — what you want to learn.
+- `search_queries` — up to 8 specific queries.
+- `max_results` — 1–8, defaults to 5.
+- `after_date` — `YYYY-MM-DD` freshness filter.
+
+## `web_fetch`
+
+Fetch up to 10 URLs at once. Each document's body is written to disk as a native artifact (markdown, patch, source file), and the tool result is just a digest: title, facts, the artifact file paths with sizes, and a capped excerpt. The agent reads the full body from disk only when it needs to.
+
+Pass an optional `objective` to steer extraction, where supported.
+
+### Fetchers
+
+`web_fetch` routes each URL through a chain of fetchers that can handle certain kinds of urls. The first to produce a document wins. The chain is `github → parallel → local`.
+
+**GitHub** — source-native resolution through the GitHub API (Octokit). It recognizes and resolves:
+
+- Repository READMEs
+- Individual files (including `blob` URLs and bare `owner/repo/path` refs)
+- Directories, as a listing
+- Issues and pull requests, with their discussion; PRs also carry the diff
+- Listing out Issues and PRs_: `github.com/{owner}/{repo}/issues` or `/pulls`, optionally with `?q=` in GitHub search syntax, returning up to 100 matches
+
+Auth is optional but recommended (see Configuration).
+
+**Parallel** — general-purpose web extraction for anything that is not GitHub. Optimized for agent output. Requires `PARALLEL_API_KEY`; without the key it just falls throug to the next fetcher.
+
+**Local** — a browser-backed fallback that fetches with [`playwright-core`](https://github.com/microsoft/playwright) and converts HTML to markdown with [`Trafilatura`](https://github.com/adbar/trafilatura). It can access pages behind a login (if the user invokes the interactive browser `/open-browser` and logs in), and download non-html files such as PDFs.
 
 ## Development
 
 ```bash
-mise run check
+mise run check   # lint, format, typecheck, test
 ```
 
-See `DEV.md` and `SMOKE.md`.
+See `DEV.md` for commands and project layout, `SMOKE.md` for the manual smoke checklist, and `CONTEXT.md` for project vocabulary.
+
+## License
+
+MIT
