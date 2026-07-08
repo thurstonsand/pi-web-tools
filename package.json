@@ -1,0 +1,79 @@
+{
+  "name": "@thurstonsand/pi-web-tools",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Pi extension package for web search and URL-native document fetching",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thurstonsand/pi-web-tools.git"
+  },
+  "homepage": "https://github.com/thurstonsand/pi-web-tools#readme",
+  "bugs": {
+    "url": "https://github.com/thurstonsand/pi-web-tools/issues"
+  },
+  "keywords": [
+    "pi-package"
+  ],
+  "engines": {
+    "node": ">=20 <26"
+  },
+  "files": [
+    "extensions",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "CONTEXT.md",
+    "DEV.md",
+    "SMOKE.md",
+    "AGENTS.md",
+    "docs"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/web-tools.ts"
+    ]
+  },
+  "scripts": {
+    "lint": "mise run lint",
+    "format": "mise run format",
+    "typecheck": "mise run typecheck",
+    "test": "mise run test",
+    "check": "mise run check",
+    "prepare": "husky || true"
+  },
+  "dependencies": {
+    "@octokit/rest": "^22.0.1",
+    "parallel-web": "^0.4.1",
+    "playwright-core": "^1.61.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.14",
+    "@earendil-works/pi-agent-core": "^0.80.2",
+    "@earendil-works/pi-ai": "^0.80.2",
+    "@earendil-works/pi-coding-agent": "^0.80.2",
+    "@earendil-works/pi-tui": "^0.80.2",
+    "@types/node": "^25.6.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.3",
+    "typebox": "^1.1.38",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-agent-core": ">=0.80.2",
+    "@earendil-works/pi-ai": ">=0.80.2",
+    "@earendil-works/pi-coding-agent": ">=0.80.2",
+    "@earendil-works/pi-tui": ">=0.80.2",
+    "typebox": ">=1.1.24"
+  },
+  "lint-staged": {
+    "*.{js,cjs,mjs,jsx,ts,tsx,json,jsonc}": "biome check --write --no-errors-on-unmatched"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.6"
+  }
+}
