@@ -47,3 +47,4 @@ pi -e /Users/thurstonsand/Develop/pi-web-tools
 - entry: `extensions/web-tools.ts` — composes GitHub auth + the `[github, parallel, local]` fetcher chain, registers `web_fetch`/`web_search` tools and the `/browser` command
 - core: `extensions/web-tools/` — `contract.ts` (cross-module types), `router.ts` (claim-and-cascade), `delivery.ts` (digest rendering), `settings.ts`
 - fetchers: `extensions/web-tools/fetchers/`
+  - local browser fetcher: concurrency and lifecycle are in `fetchers/local/browser-session.ts`, while Playwright retrieval is in `fetchers/local/fetch-worker.ts`

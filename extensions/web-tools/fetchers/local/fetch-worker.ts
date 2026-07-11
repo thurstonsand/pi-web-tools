@@ -15,6 +15,7 @@ import {
   type Page,
   type Response,
 } from "playwright-core";
+import { BrowserSession } from "./browser-session.ts";
 import {
   ensureFetchWorkerDir,
   getFetchWorkerPidPath,
@@ -45,63 +46,6 @@ const { profileDir, executablePath } = config;
 
 // ── browser ───────────────────────────────────────────────────────────────────
 
-let contextPromise: Promise<BrowserContext> | null = null;
-let interactiveContext: BrowserContext | null = null;
-let interactiveOpen = false;
-
-async function getContext(): Promise<BrowserContext> {
-  contextPromise ??= launchContext();
-  try {
-    return await contextPromise;
-  } catch (error) {
-    contextPromise = null;
-    throw error;
-  }
-}
-
-async function launchContext(): Promise<BrowserContext> {
-  try {
-    const context = await launchHeadlessWithNormalUserAgent();
-    context.on("close", () => {
-      contextPromise = null;
-    });
-    return context;
-  } catch (error) {
-    throw new Error(
-      `could not launch browser: ${errorMessage(error)}` +
-        (executablePath
-          ? ""
-          : " — install Google Chrome or set webTools.fetch.browser.executablePath"),
-    );
-  }
-}
-
-// Headless Chrome announces itself in the user agent ("HeadlessChrome/…"),
-// which alone trips Cloudflare's bot walls — verified: npmjs.com challenges
-// the stock headless UA and serves the same profile cleanly once the UA reads
-// as plain Chrome. Probe the real UA once per worker, then relaunch with the
-// "Headless" token dropped.
-// `probed` distinguishes "not probed yet" from "probed; no override needed" —
-// a failed probe retries on the next launch.
-let headlessUserAgent: { probed: boolean; userAgent: string | undefined } = {
-  probed: false,
-  userAgent: undefined,
-};
-
-async function launchHeadlessWithNormalUserAgent(): Promise<BrowserContext> {
-  if (headlessUserAgent.probed) return launchPersistent(true, headlessUserAgent.userAgent);
-  const probe = await launchPersistent(true);
-  const userAgent = await probeUserAgent(probe);
-  if (userAgent === null) return probe;
-  if (!userAgent.includes("HeadlessChrome")) {
-    headlessUserAgent = { probed: true, userAgent: undefined };
-    return probe;
-  }
-  await probe.close().catch(() => {});
-  headlessUserAgent = { probed: true, userAgent: userAgent.replace("HeadlessChrome", "Chrome") };
-  return launchPersistent(true, headlessUserAgent.userAgent);
-}
-
 async function probeUserAgent(context: BrowserContext): Promise<string | null> {
   try {
     const page = await context.newPage();
@@ -126,25 +70,29 @@ async function launchPersistent(headless: boolean, userAgent?: string): Promise<
   });
 }
 
-// ── page slots ────────────────────────────────────────────────────────────────
-
-let availableSlots = MAX_CONCURRENT_PAGES;
-const slotWaiters: Array<() => void> = [];
-
-async function withPageSlot<T>(work: () => Promise<T>): Promise<T> {
-  if (availableSlots > 0) {
-    availableSlots -= 1;
-  } else {
-    await new Promise<void>((resolve) => slotWaiters.push(resolve));
-  }
-  try {
-    return await work();
-  } finally {
-    const next = slotWaiters.shift();
-    if (next) next();
-    else availableSlots += 1;
-  }
-}
+const browserSession = new BrowserSession<BrowserContext>({
+  launcher: {
+    launch: launchPersistent,
+    probeUserAgent,
+  },
+  maxConcurrentPages: MAX_CONCURRENT_PAGES,
+  interactiveConflictMessage: "interactive browser is open — quit Chrome to resume fetching",
+  headlessLaunchError: (error) =>
+    new Error(
+      `could not launch browser: ${errorMessage(error)}` +
+        (executablePath
+          ? ""
+          : " — install Google Chrome or set webTools.fetch.browser.executablePath"),
+    ),
+  headedLaunchError: (error) =>
+    new Error(`${CHALLENGE_BLOCKED_MESSAGE} (headed escalation failed: ${errorMessage(error)})`),
+  interactiveLaunchError: (error) =>
+    new Error(`could not open the interactive browser: ${errorMessage(error)}`),
+  onInteractiveStateChange: (open) => {
+    if (open && idleTimer) clearTimeout(idleTimer);
+    if (!open) resetIdleTimer();
+  },
+});
 
 // ── fetching ──────────────────────────────────────────────────────────────────
 
@@ -154,106 +102,36 @@ async function handleFetch(
   onStarted: () => void,
 ): Promise<WorkerFetchResult> {
   await mkdir(downloadDir, { recursive: true });
-  try {
-    return await headlessFetch(url, downloadDir, onStarted);
-  } catch (error) {
-    if (error instanceof ChallengeUnresolvedError) {
-      return escalatedFetch(url, downloadDir);
-    }
-    throw error;
-  }
+  return browserSession.fetch({
+    onStarted,
+    shouldEscalate: (error) => error instanceof ChallengeUnresolvedError,
+    headless: (context) =>
+      fetchInContext(context, url, downloadDir, {
+        waitSecs: config.challenge.headlessWaitSecs,
+        escalatable: config.challenge.escalation === "headed",
+      }),
+    headed: (context) => {
+      const startedAt = Date.now();
+      return fetchInContext(context, url, downloadDir, {
+        waitSecs: config.challenge.headedWaitSecs,
+        startedAt,
+        escalatable: false,
+      });
+    },
+  });
 }
 
-async function headlessFetch(
+async function fetchInContext(
+  context: BrowserContext,
   url: string,
   downloadDir: string,
-  onStarted: () => void,
+  challengeWait: ChallengeWait,
 ): Promise<WorkerFetchResult> {
-  while (escalation) await escalation;
-  activeHeadlessFetches += 1;
+  const page = await context.newPage();
   try {
-    if (interactiveOpen) {
-      throw new Error("interactive browser is open — quit Chrome to resume fetching");
-    }
-    const context = await getContext();
-    return await withPageSlot(async () => {
-      onStarted();
-      const page = await context.newPage();
-      try {
-        return await fetchWithPage(page, url, downloadDir, {
-          waitSecs: config.challenge.headlessWaitSecs,
-          escalatable: config.challenge.escalation === "headed",
-        });
-      } finally {
-        await page.close().catch(() => {});
-      }
-    });
+    return await fetchWithPage(page, url, downloadDir, challengeWait);
   } finally {
-    activeHeadlessFetches -= 1;
-    if (activeHeadlessFetches === 0) for (const wake of drainWaiters.splice(0)) wake();
-  }
-}
-
-// Serialize behind a gate that also holds
-// back new headless fetches, drain in-flight peers, swap the shared profile to
-// a headed browser, let the challenge resolve visibly, capture there, swap
-// back. Headless relaunches lazily on the next fetch.
-let escalation: Promise<void> | null = null;
-let activeHeadlessFetches = 0;
-const drainWaiters: Array<() => void> = [];
-
-async function escalatedFetch(url: string, downloadDir: string): Promise<WorkerFetchResult> {
-  // Waiting out someone else's escalation may have recovered the profile for
-  // this URL too — escalation is profile recovery, not a per-request fetch
-  // mode — so retry the cheap path once before opening another window.
-  while (escalation) {
-    await escalation;
-    try {
-      return await headlessFetch(url, downloadDir, () => {});
-    } catch (error) {
-      if (!(error instanceof ChallengeUnresolvedError)) throw error;
-    }
-  }
-  let release!: () => void;
-  escalation = new Promise((resolve) => {
-    release = resolve;
-  });
-  try {
-    while (activeHeadlessFetches > 0) {
-      await new Promise<void>((resolve) => drainWaiters.push(resolve));
-    }
-    if (interactiveOpen) {
-      throw new Error("interactive browser is open — quit Chrome to resume fetching");
-    }
-    const headless = contextPromise ? await contextPromise.catch(() => null) : null;
-    contextPromise = null;
-    await headless?.close().catch(() => {});
-
-    let headed: BrowserContext;
-    try {
-      headed = await launchPersistent(false);
-    } catch (error) {
-      throw new Error(
-        `${CHALLENGE_BLOCKED_MESSAGE} (headed escalation failed: ${errorMessage(error)})`,
-      );
-    }
-    try {
-      const page = await headed.newPage();
-      try {
-        return await fetchWithPage(page, url, downloadDir, {
-          waitSecs: config.challenge.headedWaitSecs,
-          startedAt: Date.now(),
-          escalatable: false,
-        });
-      } finally {
-        await page.close().catch(() => {});
-      }
-    } finally {
-      await headed.close().catch(() => {});
-    }
-  } finally {
-    escalation = null;
-    release();
+    await page.close().catch(() => {});
   }
 }
 
@@ -378,35 +256,8 @@ async function resolveChallenge(
   await page.waitForLoadState("load", { timeout: remainingMs() }).catch(() => {});
 }
 
-// The persistent profile admits one browser instance, so the headless context
-// must close before the headed one launches. The context's close event — fired
-// when the user quits Chrome — is what resumes normal operation.
 async function handleOpenBrowser(): Promise<void> {
-  if (interactiveOpen) {
-    throw new Error("interactive browser is already open");
-  }
-  const headless = contextPromise ? await contextPromise.catch(() => null) : null;
-  contextPromise = null;
-  await headless?.close().catch(() => {});
-
-  interactiveOpen = true;
-  if (idleTimer) clearTimeout(idleTimer);
-  try {
-    interactiveContext = await chromium.launchPersistentContext(profileDir, {
-      headless: false,
-      acceptDownloads: true,
-      ...(executablePath ? { executablePath } : { channel: "chrome" }),
-    });
-    interactiveContext.on("close", () => {
-      interactiveContext = null;
-      interactiveOpen = false;
-      resetIdleTimer();
-    });
-  } catch (error) {
-    interactiveOpen = false;
-    resetIdleTimer();
-    throw new Error(`could not open the interactive browser: ${errorMessage(error)}`);
-  }
+  await browserSession.openInteractive();
 }
 
 // Hydrated pages park content in open shadow roots that page.content() cannot
@@ -487,7 +338,7 @@ function resetIdleTimer(): void {
   if (idleTimer) clearTimeout(idleTimer);
   // A login session must never be killed by the idle timer; the interactive
   // context's close event re-arms it.
-  if (interactiveOpen) return;
+  if (browserSession.isInteractiveOpen) return;
   idleTimer = setTimeout(() => {
     if (inflight > 0) {
       resetIdleTimer();
@@ -507,11 +358,7 @@ async function shutdown(code: number): Promise<never> {
         unlinkSync(file);
       } catch {}
     }
-    if (contextPromise) {
-      const context = await contextPromise.catch(() => null);
-      await context?.close().catch(() => {});
-    }
-    await interactiveContext?.close().catch(() => {});
+    await browserSession.close();
   }
   process.exit(code);
 }

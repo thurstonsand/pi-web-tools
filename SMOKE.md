@@ -26,4 +26,6 @@ Checklist:
 - With Parallel unavailable, fetch an MDN reference page locally and confirm its example code blocks survive (shadow piercing).
 - With Parallel unavailable, fetch `https://www.npmjs.com/package/turndown` on a cold profile and confirm it succeeds headless without a visible browser window.
 - With `webTools.fetch.challenge.escalation: "never"` and a page that keeps challenging, confirm the per-URL failure names the bot wall and points at `/browser open`.
-- `/browser restart` stops the worker; the next fetch respawns it with current settings.
+- Send more than six local URLs in one batch and confirm only six report `started` before a page slot is released; all results complete.
+- Keep a worker connection open for at least 10 seconds and confirm heartbeats arrive about every 5 seconds.
+- `/browser restart` waits for the old worker to exit; the next fetch respawns it with current settings and a different PID.
