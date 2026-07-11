@@ -3,7 +3,7 @@ import { createWebFetchTool } from "./web-tools/fetch.ts";
 import { createGitHubAuth } from "./web-tools/fetchers/github/auth.ts";
 import { createGitHubFetcher } from "./web-tools/fetchers/github/index.ts";
 import { createLocalFetcher } from "./web-tools/fetchers/local/local.ts";
-import { createTrafilaturaExtractor } from "./web-tools/fetchers/local/local-extractor.ts";
+import { createRehypeExtractor } from "./web-tools/fetchers/local/local-extractor.ts";
 import { createFetchWorkerClient } from "./web-tools/fetchers/local/worker-connection.ts";
 import {
   createParallelFetcher,
@@ -19,26 +19,38 @@ export default async function parallelWebTools(pi: ExtensionAPI) {
   // Parallel drops out of both the search tool and the fetch fallback chain.
   const Parallel = hasParallelApiKey() ? await loadParallelConstructor() : null;
   if (Parallel) pi.registerTool(createWebSearchTool(Parallel));
-  const settings = loadWebToolsSettings();
-  const workerClient = createFetchWorkerClient(settings.fetch.browser);
+  const workerClient = createFetchWorkerClient(() => loadWebToolsSettings().fetch);
   pi.registerTool(
     createWebFetchTool([
       createGitHubFetcher(createGitHubAuth()),
       ...(Parallel ? [createParallelFetcher(Parallel)] : []),
-      createLocalFetcher(workerClient, createTrafilaturaExtractor()),
+      createLocalFetcher(workerClient, createRehypeExtractor()),
     ]),
   );
-  pi.registerCommand("open-browser", {
-    description: "Open the fetch browser to log into sites for authenticated fetching",
-    handler: async (_args, ctx) => {
+  pi.registerCommand("browser", {
+    description: "Fetch browser: `open` for interactive login, `restart` to apply settings",
+    handler: async (args, ctx) => {
       try {
-        await workerClient.openBrowser();
-        ctx.ui.notify(
-          "Interactive browser open — log in as needed, then quit Chrome to resume fetching",
-          "info",
-        );
+        switch (args?.trim() || "open") {
+          case "open":
+            await workerClient.openBrowser();
+            ctx.ui.notify(
+              "Interactive browser open — log in as needed, then quit Chrome to resume fetching",
+              "info",
+            );
+            break;
+          case "restart":
+            await workerClient.restart();
+            ctx.ui.notify(
+              "Fetch worker stopped — the next fetch relaunches it with current settings",
+              "info",
+            );
+            break;
+          default:
+            ctx.ui.notify("usage: /browser [open|restart]", "error");
+        }
       } catch (error) {
-        ctx.ui.notify(`open-browser failed: ${getErrorMessage(error)}`, "error");
+        ctx.ui.notify(`browser command failed: ${getErrorMessage(error)}`, "error");
       }
     },
   });

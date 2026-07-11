@@ -23,7 +23,7 @@ export function createLocalFetcher(client: FetchWorkerClient, extractor: Extract
     artifactDir: string,
     result: WorkerFetchResult,
   ): Promise<FetchedDocument> {
-    const markdown = (await extractor.extractToMarkdown(result.file)).trim();
+    const markdown = (await extractor.extractToMarkdown(result.file, url)).trim();
     if (!markdown) throw new Error(`${extractor.name} extracted no content`);
     const body = await writeDocumentBody(artifactDir, url, "content.md", `${markdown}\n`);
     await unlink(result.file);

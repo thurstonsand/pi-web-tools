@@ -4,7 +4,7 @@
 
 ## Status
 
-Accepted
+Accepted — extractor choice (trafilatura/defuddle) superseded by `05-local-extraction-quality-and-challenge-escalation.md`
 
 ## Decision Summary
 

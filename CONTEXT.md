@@ -8,3 +8,4 @@
 - **Highlights**: Objective-steered answers to a question the agent posed when requesting the document.
 - **Fetch worker**: The singleton standalone process that owns `playwright-core` and the browser; the only process that ever touches a browser driver.
 - **Extractor**: The HTML→markdown seam inside the local fetcher.
+- **Browser Escalation**: The worker's headed retry of a bot-challenged fetch — swap the persistent profile to a visible browser, let the challenge resolve, capture there, swap back. Governed by `webTools.fetch.challenge.escalation`.

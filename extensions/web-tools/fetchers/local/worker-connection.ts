@@ -6,12 +6,13 @@ import { connect, type Socket } from "node:net";
 import { basename, delimiter, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import type { FetchBrowserSettings } from "../../settings.ts";
+import type { FetchSettings } from "../../settings.ts";
 import {
   ensureFetchWorkerDir,
   getFetchWorkerPidPath,
   getFetchWorkerSocketPath,
   getFetchWorkerSpawnLockPath,
+  type WorkerConfig,
   type WorkerEvent,
   type WorkerFetchResult,
   type WorkerRequest,
@@ -20,13 +21,17 @@ import {
 const WORKER_PATH = join(fileURLToPath(new URL(".", import.meta.url)), "fetch-worker.ts");
 const SPAWN_CONNECT_ATTEMPTS = 30; // x100ms
 const SPAWN_LOCK_STALE_MS = 10_000;
-// Comfortably above the worker's 15s navigation timeout; a request that blows
-// past this is a zombie worker, not a slow page.
-const REQUEST_DEADLINE_MS = 60_000;
+// The worker's worst honest path is a challenge escalation: two navigations
+// plus both challenge wait budgets plus peer drain. The budgets arrive on the
+// worker's `started` event (the worker is canonical for its own config); this
+// base covers the rest. A request that blows past the sum is a zombie worker,
+// not a slow page. Defaults (10s + 20s) land on 60s.
+const REQUEST_DEADLINE_BASE_MS = 30_000;
 
 export interface FetchWorkerClient {
   fetch(url: string, downloadDir: string): Promise<WorkerFetchResult>;
   openBrowser(): Promise<void>;
+  restart(): Promise<void>;
 }
 
 // pi ships as a compiled binary, so process.execPath points at pi, not node.
@@ -95,10 +100,22 @@ function releaseSpawnLock(): void {
 type PendingRequest = {
   resolve: (event: WorkerEvent) => void;
   reject: (error: Error) => void;
-  deadline: NodeJS.Timeout;
+  // Armed when the worker reports the request started (sized by the budget
+  // the worker will actually honor), not at send: time spent queued behind
+  // the worker's page slots or an escalation must not count against the
+  // deadline. Liveness before `started` is the stall watchdog's job.
+  deadline: NodeJS.Timeout | null;
 };
 
-export function createFetchWorkerClient(settings: FetchBrowserSettings): FetchWorkerClient {
+// The worker heartbeats every 5s per connection; with requests pending, this
+// much total silence — no heartbeat, status, or result — means the worker is
+// wedged. Liveness must be traffic-based rather than duration-based: only the
+// worker knows how long its work takes.
+const STALL_SILENCE_MS = 20_000;
+
+// Settings are re-read at every spawn, so a worker restart (idle exit or
+// /browser restart) picks up settings changes without a new pi session.
+export function createFetchWorkerClient(getSettings: () => FetchSettings): FetchWorkerClient {
   const socketPath = getFetchWorkerSocketPath();
   let sock: Socket | null = null;
   let connecting: Promise<Socket> | null = null;
@@ -118,6 +135,28 @@ export function createFetchWorkerClient(settings: FetchBrowserSettings): FetchWo
     });
   }
 
+  function armDeadline(id: string, request: PendingRequest, deadlineMs: number): void {
+    if (request.deadline) return;
+    request.deadline = setTimeout(() => {
+      pending.delete(id);
+      resetStallTimer();
+      // Deadline expiry means the worker failed to enforce its own stage
+      // timeouts — it is wedged, not slow, and it would stall every later
+      // request too; put it down so the next fetch respawns clean.
+      void terminateWorker();
+      request.reject(new Error(`fetch worker did not respond within ${deadlineMs / 1000}s`));
+    }, deadlineMs);
+  }
+
+  let stallTimer: NodeJS.Timeout | null = null;
+
+  function resetStallTimer(): void {
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = null;
+    if (pending.size === 0) return;
+    stallTimer = setTimeout(() => void terminateWorker(), STALL_SILENCE_MS);
+  }
+
   function attachReader(socket: Socket): void {
     const rl = createInterface({ input: socket, crlfDelay: Number.POSITIVE_INFINITY });
     rl.on("line", (line) => {
@@ -127,21 +166,30 @@ export function createFetchWorkerClient(settings: FetchBrowserSettings): FetchWo
       } catch {
         return;
       }
-      if (event.event === "status") return;
+      resetStallTimer();
+      if (event.event === "heartbeat") return;
       const request = pending.get(event.id);
       if (!request) return;
+      if (event.event === "status") {
+        if (event.stage === "started") {
+          armDeadline(event.id, request, REQUEST_DEADLINE_BASE_MS + event.budgetSecs * 1000);
+        }
+        return;
+      }
       pending.delete(event.id);
-      clearTimeout(request.deadline);
+      resetStallTimer();
+      if (request.deadline) clearTimeout(request.deadline);
       request.resolve(event);
     });
   }
 
   function failAllPending(error: Error): void {
     for (const request of pending.values()) {
-      clearTimeout(request.deadline);
+      if (request.deadline) clearTimeout(request.deadline);
       request.reject(error);
     }
     pending.clear();
+    resetStallTimer();
   }
 
   async function ensureConnected(): Promise<Socket> {
@@ -162,15 +210,18 @@ export function createFetchWorkerClient(settings: FetchBrowserSettings): FetchWo
         if (spawnedHere) {
           const node = resolveNode();
           if (!node) throw new Error("no node interpreter found to spawn the fetch worker");
-          const child = spawn(
-            node,
-            [
-              WORKER_PATH,
-              settings.profileDir,
-              ...(settings.executablePath ? [settings.executablePath] : []),
-            ],
-            { detached: true, stdio: "ignore" },
-          );
+          const settings = getSettings();
+          const config: WorkerConfig = {
+            profileDir: settings.browser.profileDir,
+            ...(settings.browser.executablePath
+              ? { executablePath: settings.browser.executablePath }
+              : {}),
+            challenge: settings.challenge,
+          };
+          const child = spawn(node, [WORKER_PATH, JSON.stringify(config)], {
+            detached: true,
+            stdio: "ignore",
+          });
           child.unref();
         }
         for (let attempt = 0; attempt < SPAWN_CONNECT_ATTEMPTS && !socket; attempt += 1) {
@@ -188,26 +239,34 @@ export function createFetchWorkerClient(settings: FetchBrowserSettings): FetchWo
     return socket;
   }
 
+  async function readWorkerPid(): Promise<number | null> {
+    try {
+      const pid = Number.parseInt(await readFile(getFetchWorkerPidPath(), "utf8"), 10);
+      return Number.isInteger(pid) && pid > 0 ? pid : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function terminateWorker(): Promise<void> {
     sock?.destroy();
     sock = null;
-    try {
-      const pid = Number.parseInt(await readFile(getFetchWorkerPidPath(), "utf8"), 10);
-      if (Number.isInteger(pid) && pid > 0) process.kill(pid, "SIGTERM");
-    } catch {}
+    const pid = await readWorkerPid();
+    if (pid) {
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {}
+    }
   }
 
   async function request(payload: WorkerRequest): Promise<WorkerEvent> {
     const socket = await ensureConnected();
     return new Promise((resolve, reject) => {
-      const deadline = setTimeout(() => {
-        pending.delete(payload.id);
-        // A hung worker would stall every later request too; put it down so
-        // the next fetch respawns clean.
-        void terminateWorker();
-        reject(new Error(`fetch worker did not respond within ${REQUEST_DEADLINE_MS / 1000}s`));
-      }, REQUEST_DEADLINE_MS);
-      pending.set(payload.id, { resolve, reject, deadline });
+      const request: PendingRequest = { resolve, reject, deadline: null };
+      pending.set(payload.id, request);
+      resetStallTimer();
+      // Only fetch ops queue; anything else starts immediately, so arm now.
+      if (payload.op !== "fetch") armDeadline(payload.id, request, REQUEST_DEADLINE_BASE_MS);
       socket.write(`${JSON.stringify(payload)}\n`);
     });
   }
@@ -225,6 +284,25 @@ export function createFetchWorkerClient(settings: FetchBrowserSettings): FetchWo
     async openBrowser() {
       const event = await request({ id: randomUUID(), op: "open-browser" });
       if (event.event === "error") throw new Error(event.reason);
+    },
+    async restart() {
+      const pid = await readWorkerPid();
+      await terminateWorker();
+      if (!pid) return;
+      // Restart is a barrier: wait for the old worker to actually exit so the
+      // next fetch cannot reconnect to a dying socket.
+      const gaveUpAt = Date.now() + 5_000;
+      while (Date.now() < gaveUpAt) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        try {
+          process.kill(pid, 0);
+        } catch {
+          return;
+        }
+      }
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {}
     },
   };
 }

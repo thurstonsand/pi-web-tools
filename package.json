@@ -44,7 +44,13 @@
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
-    "playwright-core": "^1.61.0"
+    "playwright-core": "^1.61.0",
+    "rehype-parse": "^9.0.1",
+    "rehype-remark": "^10.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-stringify": "^11.0.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.1.0"
   },
   "optionalDependencies": {
     "parallel-web": "^0.4.1"

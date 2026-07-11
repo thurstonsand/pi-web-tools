@@ -19,6 +19,7 @@ import {
   ensureFetchWorkerDir,
   getFetchWorkerPidPath,
   getFetchWorkerSocketPath,
+  type WorkerConfig,
   type WorkerEvent,
   type WorkerFetchResult,
   type WorkerRequest,
@@ -34,13 +35,13 @@ const IDLE_EXIT_MS = 5 * 60 * 1000; // 5min
 const MAX_CONCURRENT_PAGES = 6;
 const MAX_PAYLOAD_BYTES = 100 * 1024 * 1024; // 100MB
 
-const profileDirArg = process.argv[2];
-const executablePath = process.argv[3];
-if (!profileDirArg) {
-  console.error("usage: node fetch-worker.ts <profileDir> [executablePath]");
+const configArg = process.argv[2];
+if (!configArg) {
+  console.error("usage: node fetch-worker.ts <config-json>");
   process.exit(1);
 }
-const profileDir = profileDirArg;
+const config = JSON.parse(configArg) as WorkerConfig;
+const { profileDir, executablePath } = config;
 
 // ── browser ───────────────────────────────────────────────────────────────────
 
@@ -59,13 +60,8 @@ async function getContext(): Promise<BrowserContext> {
 }
 
 async function launchContext(): Promise<BrowserContext> {
-  await mkdir(profileDir, { recursive: true });
   try {
-    const context = await chromium.launchPersistentContext(profileDir, {
-      headless: true,
-      acceptDownloads: true,
-      ...(executablePath ? { executablePath } : { channel: "chrome" }),
-    });
+    const context = await launchHeadlessWithNormalUserAgent();
     context.on("close", () => {
       contextPromise = null;
     });
@@ -78,6 +74,56 @@ async function launchContext(): Promise<BrowserContext> {
           : " — install Google Chrome or set webTools.fetch.browser.executablePath"),
     );
   }
+}
+
+// Headless Chrome announces itself in the user agent ("HeadlessChrome/…"),
+// which alone trips Cloudflare's bot walls — verified: npmjs.com challenges
+// the stock headless UA and serves the same profile cleanly once the UA reads
+// as plain Chrome. Probe the real UA once per worker, then relaunch with the
+// "Headless" token dropped.
+// `probed` distinguishes "not probed yet" from "probed; no override needed" —
+// a failed probe retries on the next launch.
+let headlessUserAgent: { probed: boolean; userAgent: string | undefined } = {
+  probed: false,
+  userAgent: undefined,
+};
+
+async function launchHeadlessWithNormalUserAgent(): Promise<BrowserContext> {
+  if (headlessUserAgent.probed) return launchPersistent(true, headlessUserAgent.userAgent);
+  const probe = await launchPersistent(true);
+  const userAgent = await probeUserAgent(probe);
+  if (userAgent === null) return probe;
+  if (!userAgent.includes("HeadlessChrome")) {
+    headlessUserAgent = { probed: true, userAgent: undefined };
+    return probe;
+  }
+  await probe.close().catch(() => {});
+  headlessUserAgent = { probed: true, userAgent: userAgent.replace("HeadlessChrome", "Chrome") };
+  return launchPersistent(true, headlessUserAgent.userAgent);
+}
+
+async function probeUserAgent(context: BrowserContext): Promise<string | null> {
+  try {
+    const page = await context.newPage();
+    const userAgent = await Promise.race([
+      page.evaluate(() => navigator.userAgent),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000)),
+    ]);
+    await page.close().catch(() => {});
+    return userAgent;
+  } catch {
+    return null;
+  }
+}
+
+async function launchPersistent(headless: boolean, userAgent?: string): Promise<BrowserContext> {
+  await mkdir(profileDir, { recursive: true });
+  return chromium.launchPersistentContext(profileDir, {
+    headless,
+    acceptDownloads: true,
+    ...(userAgent ? { userAgent } : {}),
+    ...(executablePath ? { executablePath } : { channel: "chrome" }),
+  });
 }
 
 // ── page slots ────────────────────────────────────────────────────────────────
@@ -102,26 +148,129 @@ async function withPageSlot<T>(work: () => Promise<T>): Promise<T> {
 
 // ── fetching ──────────────────────────────────────────────────────────────────
 
-async function handleFetch(url: string, downloadDir: string): Promise<WorkerFetchResult> {
-  if (interactiveOpen) {
-    throw new Error("interactive browser is open — quit Chrome to resume fetching");
-  }
-  const context = await getContext();
+async function handleFetch(
+  url: string,
+  downloadDir: string,
+  onStarted: () => void,
+): Promise<WorkerFetchResult> {
   await mkdir(downloadDir, { recursive: true });
-  return withPageSlot(async () => {
-    const page = await context.newPage();
-    try {
-      return await fetchWithPage(page, url, downloadDir);
-    } finally {
-      await page.close().catch(() => {});
+  try {
+    return await headlessFetch(url, downloadDir, onStarted);
+  } catch (error) {
+    if (error instanceof ChallengeUnresolvedError) {
+      return escalatedFetch(url, downloadDir);
     }
+    throw error;
+  }
+}
+
+async function headlessFetch(
+  url: string,
+  downloadDir: string,
+  onStarted: () => void,
+): Promise<WorkerFetchResult> {
+  while (escalation) await escalation;
+  activeHeadlessFetches += 1;
+  try {
+    if (interactiveOpen) {
+      throw new Error("interactive browser is open — quit Chrome to resume fetching");
+    }
+    const context = await getContext();
+    return await withPageSlot(async () => {
+      onStarted();
+      const page = await context.newPage();
+      try {
+        return await fetchWithPage(page, url, downloadDir, {
+          waitSecs: config.challenge.headlessWaitSecs,
+          escalatable: config.challenge.escalation === "headed",
+        });
+      } finally {
+        await page.close().catch(() => {});
+      }
+    });
+  } finally {
+    activeHeadlessFetches -= 1;
+    if (activeHeadlessFetches === 0) for (const wake of drainWaiters.splice(0)) wake();
+  }
+}
+
+// Serialize behind a gate that also holds
+// back new headless fetches, drain in-flight peers, swap the shared profile to
+// a headed browser, let the challenge resolve visibly, capture there, swap
+// back. Headless relaunches lazily on the next fetch.
+let escalation: Promise<void> | null = null;
+let activeHeadlessFetches = 0;
+const drainWaiters: Array<() => void> = [];
+
+async function escalatedFetch(url: string, downloadDir: string): Promise<WorkerFetchResult> {
+  // Waiting out someone else's escalation may have recovered the profile for
+  // this URL too — escalation is profile recovery, not a per-request fetch
+  // mode — so retry the cheap path once before opening another window.
+  while (escalation) {
+    await escalation;
+    try {
+      return await headlessFetch(url, downloadDir, () => {});
+    } catch (error) {
+      if (!(error instanceof ChallengeUnresolvedError)) throw error;
+    }
+  }
+  let release!: () => void;
+  escalation = new Promise((resolve) => {
+    release = resolve;
   });
+  try {
+    while (activeHeadlessFetches > 0) {
+      await new Promise<void>((resolve) => drainWaiters.push(resolve));
+    }
+    if (interactiveOpen) {
+      throw new Error("interactive browser is open — quit Chrome to resume fetching");
+    }
+    const headless = contextPromise ? await contextPromise.catch(() => null) : null;
+    contextPromise = null;
+    await headless?.close().catch(() => {});
+
+    let headed: BrowserContext;
+    try {
+      headed = await launchPersistent(false);
+    } catch (error) {
+      throw new Error(
+        `${CHALLENGE_BLOCKED_MESSAGE} (headed escalation failed: ${errorMessage(error)})`,
+      );
+    }
+    try {
+      const page = await headed.newPage();
+      try {
+        return await fetchWithPage(page, url, downloadDir, {
+          waitSecs: config.challenge.headedWaitSecs,
+          startedAt: Date.now(),
+          escalatable: false,
+        });
+      } finally {
+        await page.close().catch(() => {});
+      }
+    } finally {
+      await headed.close().catch(() => {});
+    }
+  } finally {
+    escalation = null;
+    release();
+  }
+}
+
+interface ChallengeWait {
+  waitSecs: number;
+  // When set, the budget clock started here (headed attempts: at navigation,
+  // since the whole attempt exists only because of the challenge). Otherwise
+  // it starts at challenge detection.
+  startedAt?: number;
+  escalatable: boolean;
 }
 
 async function fetchWithPage(
   page: Page,
   url: string,
   downloadDir: string,
+  challengeWait: ChallengeWait,
 ): Promise<WorkerFetchResult> {
   const downloadPromise = page
     .waitForEvent("download", { timeout: NAVIGATION_TIMEOUT_MS })
@@ -139,6 +288,11 @@ async function fetchWithPage(
   }
   if (!response) throw new Error("navigation returned no response");
 
+  if (response.headers()["cf-mitigated"] === "challenge") {
+    const deadlineAt = (challengeWait.startedAt ?? Date.now()) + challengeWait.waitSecs * 1000;
+    await resolveChallenge(page, deadlineAt, challengeWait.escalatable);
+  }
+
   // Route on document.contentType, not the response header: the header is set
   // at the whims of the delivery mechanism (react.dev's service worker serves
   // navigations with no content-type at all), while document.contentType is
@@ -154,7 +308,7 @@ async function fetchWithPage(
     // Give SPAs a moment to settle, but never fail a page over lingering
     // network activity.
     await page.waitForLoadState("networkidle", { timeout: NETWORK_IDLE_GRACE_MS }).catch(() => {});
-    const html = await page.content();
+    const html = await capturePageHtml(page);
     const bytes = Buffer.byteLength(html, "utf8");
     assertWithinCap(bytes);
     const file = path.join(downloadDir, "page.html");
@@ -183,6 +337,45 @@ async function fetchWithPage(
     contentType: headers["content-type"] ?? contentType,
     bytes: body.byteLength,
   };
+}
+
+const CHALLENGE_BLOCKED_MESSAGE =
+  "blocked by a bot-detection challenge (cloudflare) — run `/browser open` to resolve it manually";
+
+class ChallengeUnresolvedError extends Error {
+  constructor() {
+    super(CHALLENGE_BLOCKED_MESSAGE);
+  }
+}
+
+// Cloudflare marks challenge interstitials with a `cf-mitigated: challenge`
+// response header. Success triggers a fresh main-frame navigation without the
+// header — the same signal as detection, so no title or body heuristics. A
+// failing challenge produces no "gave up" signal; the wait budget is the only
+// honest terminator. The budget is one merged clock: the challenge wait and
+// the post-resolution load draw from the same deadline, so a fast step's
+// leftover spills into the next.
+async function resolveChallenge(
+  page: Page,
+  deadlineAt: number,
+  escalatable: boolean,
+): Promise<void> {
+  const remainingMs = () => Math.max(deadlineAt - Date.now(), 1);
+  const resolved = await page
+    .waitForResponse(
+      (response) =>
+        response.request().isNavigationRequest() &&
+        response.frame() === page.mainFrame() &&
+        response.headers()["cf-mitigated"] !== "challenge",
+      { timeout: remainingMs() },
+    )
+    .then(() => true)
+    .catch(() => false);
+  if (!resolved) {
+    if (escalatable) throw new ChallengeUnresolvedError();
+    throw new Error(CHALLENGE_BLOCKED_MESSAGE);
+  }
+  await page.waitForLoadState("load", { timeout: remainingMs() }).catch(() => {});
 }
 
 // The persistent profile admits one browser instance, so the headless context
@@ -214,6 +407,29 @@ async function handleOpenBrowser(): Promise<void> {
     resetIdleTimer();
     throw new Error(`could not open the interactive browser: ${errorMessage(error)}`);
   }
+}
+
+// Hydrated pages park content in open shadow roots that page.content() cannot
+// see; getHTML serializes them as declarative shadow templates, which the
+// extractor unwraps. Feature-detected: older Chrome falls back to the plain
+// serialization.
+async function capturePageHtml(page: Page): Promise<string> {
+  const pierced = await page
+    .evaluate(() => {
+      if (typeof document.documentElement.getHTML !== "function") return null;
+      const collect = (root: Document | ShadowRoot, acc: ShadowRoot[]): ShadowRoot[] => {
+        for (const el of root.querySelectorAll("*")) {
+          if (el.shadowRoot) {
+            acc.push(el.shadowRoot);
+            collect(el.shadowRoot, acc);
+          }
+        }
+        return acc;
+      };
+      return document.documentElement.getHTML({ shadowRoots: collect(document, []) });
+    })
+    .catch(() => null);
+  return pierced ?? (await page.content());
 }
 
 async function saveDownload(download: Download, downloadDir: string): Promise<WorkerFetchResult> {
@@ -310,9 +526,16 @@ async function handleRequest(socket: Socket, request: WorkerRequest): Promise<vo
   if (request.op === "fetch") {
     inflight += 1;
     resetIdleTimer();
-    send(socket, { id: request.id, event: "status", stage: "fetching" });
+    send(socket, { id: request.id, event: "status", stage: "queued" });
     try {
-      const completion = await handleFetch(request.url, request.downloadDir);
+      const completion = await handleFetch(request.url, request.downloadDir, () =>
+        send(socket, {
+          id: request.id,
+          event: "status",
+          stage: "started",
+          budgetSecs: config.challenge.headlessWaitSecs + config.challenge.headedWaitSecs,
+        }),
+      );
       send(socket, { id: request.id, event: "result", op: "fetch", ...completion });
     } catch (error) {
       send(socket, { id: request.id, event: "error", reason: errorMessage(error) });
@@ -352,7 +575,11 @@ try {
   unlinkSync(SOCK);
 } catch {}
 
+const HEARTBEAT_INTERVAL_MS = 5_000;
+
 const server = createServer((socket) => {
+  const heartbeat = setInterval(() => send(socket, { event: "heartbeat" }), HEARTBEAT_INTERVAL_MS);
+  socket.on("close", () => clearInterval(heartbeat));
   const rl = createInterface({ input: socket, crlfDelay: Number.POSITIVE_INFINITY });
   rl.on("line", (line) => {
     let request: WorkerRequest;

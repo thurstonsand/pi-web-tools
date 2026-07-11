@@ -9,10 +9,17 @@ const BROWSER_SETTINGS_SCHEMA = Type.Object({
   profileDir: Type.Optional(Type.String()),
 });
 
+const CHALLENGE_SETTINGS_SCHEMA = Type.Object({
+  escalation: Type.Optional(Type.Union([Type.Literal("headed"), Type.Literal("never")])),
+  headlessWaitSecs: Type.Optional(Type.Number()),
+  headedWaitSecs: Type.Optional(Type.Number()),
+});
+
 const WEB_TOOLS_SETTINGS_SCHEMA = Type.Object({
   fetch: Type.Optional(
     Type.Object({
       browser: Type.Optional(BROWSER_SETTINGS_SCHEMA),
+      challenge: Type.Optional(CHALLENGE_SETTINGS_SCHEMA),
     }),
   ),
 });
@@ -28,11 +35,23 @@ export interface FetchBrowserSettings {
   profileDir: string;
 }
 
-export interface WebToolsSettings {
-  fetch: {
-    browser: FetchBrowserSettings;
-  };
+export interface FetchChallengeSettings {
+  escalation: "headed" | "never";
+  headlessWaitSecs: number;
+  headedWaitSecs: number;
 }
+
+export interface FetchSettings {
+  browser: FetchBrowserSettings;
+  challenge: FetchChallengeSettings;
+}
+
+export interface WebToolsSettings {
+  fetch: FetchSettings;
+}
+
+const DEFAULT_HEADLESS_WAIT_SECS = 10;
+const DEFAULT_HEADED_WAIT_SECS = 20;
 
 export function getDefaultProfileDir(): string {
   return path.join(os.homedir(), ".pi", "agent", "browser-profile");
@@ -60,14 +79,36 @@ function normalizeAbsolutePath(value: string | undefined, key: string): string |
   return path.normalize(expanded);
 }
 
+function normalizeWaitSecs(value: number | undefined, key: string, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`webTools.fetch.challenge.${key} must be a positive number of seconds.`);
+  }
+  return value;
+}
+
 export function resolveWebToolsSettings(fileSettings: WebToolsFileSettings): WebToolsSettings {
   const browser = fileSettings.fetch?.browser ?? {};
+  const challenge = fileSettings.fetch?.challenge ?? {};
   return {
     fetch: {
       browser: {
         executablePath: normalizeAbsolutePath(browser.executablePath, "executablePath"),
         profileDir:
           normalizeAbsolutePath(browser.profileDir, "profileDir") ?? getDefaultProfileDir(),
+      },
+      challenge: {
+        escalation: challenge.escalation ?? "headed",
+        headlessWaitSecs: normalizeWaitSecs(
+          challenge.headlessWaitSecs,
+          "headlessWaitSecs",
+          DEFAULT_HEADLESS_WAIT_SECS,
+        ),
+        headedWaitSecs: normalizeWaitSecs(
+          challenge.headedWaitSecs,
+          "headedWaitSecs",
+          DEFAULT_HEADED_WAIT_SECS,
+        ),
       },
     },
   };

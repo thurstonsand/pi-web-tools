@@ -154,13 +154,13 @@ export function createParallelFetcher(Parallel: ParallelConstructor): WebFetcher
         : [];
       const errors = Array.isArray(result.errors) ? (result.errors as ParallelFetchError[]) : [];
 
-      // Positional url mapping is only trustworthy when every url produced a
-      // result; with partial errors the results array shrinks and indexes
-      // would misattribute content, so fall back to the item's own url.
-      const aligned = results.length === urls.length;
+      // Parallel returns results in completion order, not request order, so
+      // positional mapping misattributes content. Match each result back to
+      // its requested url, tolerating percent-encoding drift.
+      const requestedByCanonical = new Map(urls.map((url) => [canonicalUrl(url), url]));
       const documents = await Promise.all(
-        results.map(async (item, index): Promise<ParallelDocument> => {
-          const requestedUrl = aligned ? (urls[index] ?? item.url) : item.url;
+        results.map(async (item): Promise<ParallelDocument> => {
+          const requestedUrl = requestedByCanonical.get(canonicalUrl(item.url)) ?? item.url;
           const body = await writeDocumentBody(
             artifactDir,
             requestedUrl,
@@ -191,6 +191,23 @@ export function createParallelFetcher(Parallel: ParallelConstructor): WebFetcher
       };
     },
   };
+}
+
+export function canonicalUrl(url: string): string {
+  let href: string;
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    href = parsed.href;
+  } catch {
+    return url;
+  }
+  try {
+    href = decodeURI(href);
+  } catch {
+    // keep the encoded form when it does not round-trip
+  }
+  return href.endsWith("/") ? href.slice(0, -1) : href;
 }
 
 function normalizeParallelWarnings(warnings: ParallelFetchWarning[]): FetchWarning[] {

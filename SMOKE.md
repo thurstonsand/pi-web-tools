@@ -22,3 +22,8 @@ Checklist:
 - `web_search` a current web query.
 - `web_fetch` a non-GitHub page through Parallel.
 - With Parallel unavailable, fetch a non-GitHub page through the local browser fallback.
+- With Parallel unavailable, fetch a docs page with code (e.g. Cloudflare Workers secrets) locally and confirm fenced, language-tagged code blocks in `content.md`.
+- With Parallel unavailable, fetch an MDN reference page locally and confirm its example code blocks survive (shadow piercing).
+- With Parallel unavailable, fetch `https://www.npmjs.com/package/turndown` on a cold profile and confirm it succeeds headless without a visible browser window.
+- With `webTools.fetch.challenge.escalation: "never"` and a page that keeps challenging, confirm the per-URL failure names the bot wall and points at `/browser open`.
+- `/browser restart` stops the worker; the next fetch respawns it with current settings.

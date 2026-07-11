@@ -24,14 +24,38 @@ export function getFetchWorkerSpawnLockPath(): string {
   return join(getFetchWorkerDir(), "spawn.lock");
 }
 
+// Passed to the worker as a single JSON argv; settings changes apply when the
+// worker next restarts (idle exit), matching executablePath behavior.
+export interface WorkerConfig {
+  profileDir: string;
+  executablePath?: string;
+  challenge: WorkerChallengeConfig;
+}
+
+export interface WorkerChallengeConfig {
+  escalation: "headed" | "never";
+  headlessWaitSecs: number;
+  headedWaitSecs: number;
+}
+
 export type WorkerRequest =
   | { id: string; op: "fetch"; url: string; downloadDir: string }
   | { id: string; op: "open-browser" };
 
-export interface WorkerStatusEvent {
-  id: string;
-  event: "status";
-  stage: string;
+// "queued" on receipt; "started" once past the worker's page slots and any
+// escalation gate — the client's request deadline arms on "started", sized by
+// budgetSecs: the total challenge budget this worker will honor. The worker is
+// canonical for retrieval timing — its config may predate the client's current
+// settings, or come from another session entirely.
+export type WorkerStatusEvent =
+  | { id: string; event: "status"; stage: "queued" }
+  | { id: string; event: "status"; stage: "started"; budgetSecs: number };
+
+// Sent every few seconds per connection; the worker proves its own liveness
+// independently of how long its work takes. A client with pending requests
+// treats prolonged total silence as a wedged worker.
+export interface WorkerHeartbeatEvent {
+  event: "heartbeat";
 }
 
 export interface WorkerFetchResult {
@@ -62,6 +86,7 @@ export interface WorkerErrorEvent {
 
 export type WorkerEvent =
   | WorkerStatusEvent
+  | WorkerHeartbeatEvent
   | FetchResultEvent
   | OpenBrowserResultEvent
   | WorkerErrorEvent;
