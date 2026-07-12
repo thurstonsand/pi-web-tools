@@ -11,7 +11,14 @@ import {
   type ParallelConstructor,
   validateAfterDate,
 } from "./fetchers/parallel.ts";
-import { formatWarnings, getErrorMessage, summarizeExcerpt } from "./shared.ts";
+import {
+  formatToolDuration,
+  formatWarnings,
+  getErrorMessage,
+  startToolTiming,
+  type ToolTimingState,
+  updateToolTiming,
+} from "./shared.ts";
 
 type SearchResultItem = {
   url: string;
@@ -111,58 +118,73 @@ export function createWebSearchTool(Parallel: ParallelConstructor) {
         throw new Error(`Parallel search failed: ${getErrorMessage(error)}`);
       }
     },
-    renderCall(args, theme) {
-      const primaryQuery = (
-        args.search_queries?.find((query: string) => query.trim()) ?? args.objective
-      ).trim();
-      const extraQueries = Math.max(
-        (args.search_queries?.filter((query: string) => query.trim()).length ?? 1) - 1,
-        0,
-      );
+    renderCall(args, theme, context) {
+      const state = context.state as ToolTimingState;
+      startToolTiming(state, context.executionStarted);
 
-      let text = theme.fg("toolTitle", theme.bold("web_search "));
-      text += theme.fg("muted", primaryQuery);
-      if (extraQueries > 0) {
-        text += theme.fg("dim", ` +${extraQueries} more`);
+      let text = theme.fg("toolTitle", theme.bold("web_search"));
+      const objective = args.objective?.trim() ?? "";
+      if (objective) text += `\n${theme.fg("muted", objective)}`;
+      if (!context.isPartial || (!objective && !args.search_queries?.length)) {
+        return new Text(text, 0, 0);
+      }
+
+      const queries = normalizeSearchQueries(args.search_queries, objective);
+      const label = queries.length === 1 ? "query:" : "queries:";
+      if (queries.length === 1) {
+        text += `\n${theme.fg("dim", label)} ${theme.fg("muted", queries[0] ?? "")}`;
+      } else if (context.expanded) {
+        text += `\n${theme.fg("dim", label)}`;
+        for (const query of queries) text += `\n${theme.fg("muted", `  ${query}`)}`;
+      } else if (queries[0]) {
+        text += `\n${theme.fg("dim", label)} ${theme.fg("muted", queries[0])}`;
+        text += theme.fg("dim", `  [+${queries.length - 1} more]`);
       }
       return new Text(text, 0, 0);
     },
     renderResult(result, { expanded, isPartial }, theme, context) {
+      const state = context.state as ToolTimingState;
+      updateToolTiming(state, isPartial, context.isError, context.invalidate);
+      const duration = formatToolDuration(state);
       const renderedResult = result as RenderableToolResult<WebSearchDetails>;
       if (isPartial) {
-        return new Text(theme.fg("warning", "Searching..."), 0, 0);
+        return new Text(`${theme.fg("warning", "Scanning...")} ${theme.fg("dim", duration)}`, 0, 0);
       }
       if (context.isError) {
-        const text =
+        const error =
           renderedResult.content[0]?.type === "text"
             ? (renderedResult.content[0].text ?? "Search failed")
             : "Search failed";
-        return new Text(theme.fg("error", text), 0, 0);
+        return new Text(
+          `${theme.fg("error", error)}\n${theme.fg("dim", `Scanned in ${duration}`)}`,
+          0,
+          0,
+        );
       }
 
       const details = (renderedResult.details ?? {}) as WebSearchDetails;
       const count = details.count ?? details.results?.length ?? 0;
-      let text = theme.fg("success", `${count} result${count === 1 ? "" : "s"}`);
       const warningLines = formatWarnings(details.warnings);
+      let text = theme.fg("success", `${count} result${count === 1 ? "" : "s"}`);
       if (warningLines.length > 0) {
-        text += `\n${theme.fg("warning", expanded ? "Warnings:" : `Warnings: ${warningLines.length}`)}`;
-        if (expanded) {
-          for (const warning of warningLines) {
-            text += `\n${theme.fg("warning", `- ${warning}`)}`;
-          }
-        }
+        text += theme.fg("toolOutput", ", ");
+        text += theme.fg(
+          "warning",
+          `${warningLines.length} warning${warningLines.length === 1 ? "" : "s"}`,
+        );
       }
 
-      if (details.results?.length) {
-        for (const [index, item] of details.results.entries()) {
-          const title = item.title?.trim() || item.url;
-          const publishDate = item.publish_date ? ` (${item.publish_date})` : "";
-          const excerpt = summarizeExcerpt(item.excerpts?.[0], expanded ? 240 : 120);
-          text += `\n${theme.fg("accent", `${index + 1}. ${title}${publishDate}`)}`;
-          text += `\n${theme.fg("dim", item.url)}`;
-          if (excerpt) text += `\n${theme.fg("muted", excerpt)}`;
-        }
+      for (const [index, item] of details.results?.entries() ?? []) {
+        const title = item.title?.trim() || item.url;
+        text += `\n${theme.fg("accent", `${index + 1}. ${title}`)}`;
+        if (expanded) text += `\n${theme.fg("dim", `   ${item.url}`)}`;
       }
+
+      if (expanded && warningLines.length > 0) {
+        text += "\n";
+        for (const warning of warningLines) text += `\n${theme.fg("warning", `- ${warning}`)}`;
+      }
+      text += `\n${theme.fg("dim", `Scanned in ${duration}`)}`;
 
       return new Text(text, 0, 0);
     },

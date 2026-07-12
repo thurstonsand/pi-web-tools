@@ -4,6 +4,42 @@ import type { DocumentBody } from "./contract.ts";
 
 export const TMP_DIR = "/tmp/pi-fetch";
 
+export interface ToolTimingState {
+  startedAt?: number;
+  endedAt?: number;
+  interval?: ReturnType<typeof setInterval>;
+}
+
+export function startToolTiming(state: ToolTimingState, executionStarted: boolean): void {
+  if (executionStarted && state.startedAt === undefined) {
+    state.startedAt = Date.now();
+    delete state.endedAt;
+  }
+}
+
+export function updateToolTiming(
+  state: ToolTimingState,
+  isPartial: boolean,
+  isError: boolean,
+  invalidate: () => void,
+): void {
+  if (state.startedAt !== undefined && isPartial && !state.interval) {
+    state.interval = setInterval(invalidate, 1000);
+  }
+  if (!isPartial || isError) {
+    state.endedAt ??= Date.now();
+    if (state.interval) {
+      clearInterval(state.interval);
+      delete state.interval;
+    }
+  }
+}
+
+export function formatToolDuration(state: ToolTimingState): string {
+  if (state.startedAt === undefined) return "0.0s";
+  return `${(((state.endedAt ?? Date.now()) - state.startedAt) / 1000).toFixed(1)}s`;
+}
+
 export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
