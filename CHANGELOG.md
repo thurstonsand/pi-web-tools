@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.1
+
+### Changed
+
+- Updated the optional `parallel-web` dependency to 1.1.0.
+- Refreshed the TypeScript, Biome, and pi development toolchain, and consolidated repository automation around mise.
+
 ## 0.2.0
 
 Improved local retrieval quality and made tool activity easier to follow in pi.
