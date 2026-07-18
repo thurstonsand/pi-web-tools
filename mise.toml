@@ -1,18 +1,28 @@
+min_version = "2026.7.4"
+
 [settings]
 experimental = true
 
+[hooks]
+enter = "mise bootstrap --yes --quiet"
+
 [tools]
 actionlint = "1.7.12"
+hk = "1.50.0"
 node = "lts"
 
 [env]
+HK_MISE = "1"
 _.path = ["{{config_root}}/node_modules/.bin"]
 
 [tasks.bootstrap]
-description = "Install project dependencies"
-run = "npm install --silent --no-fund --no-audit"
-sources = ["package.json", "package-lock.json"]
-outputs = ["node_modules/.package-lock.json"]
+description = "Install project dependencies and git hooks"
+run = [
+    "npm ci --ignore-scripts --quiet --no-fund --no-audit",
+    "hk install --mise --quiet",
+]
+sources = ["mise.toml", "hk.pkl", "package.json", "package-lock.json"]
+outputs = ["node_modules/.package-lock.json", ".git/hooks/pre-commit"]
 quiet = true
 
 [tasks.lint]

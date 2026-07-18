@@ -1,8 +1,12 @@
 # Development
 
-## Environment
+## Setup
 
-This repo uses mise for tool versions, task execution, and local environment setup. `direnv allow` activates mise and runs the bootstrap flow so Node and npm dependencies are ready; no further action should be needed to begin development.
+```sh
+mise trust && mise bootstrap
+```
+
+Mise owns tool versions, task execution, and local environment setup. Bootstrap installs the required tools, npm dependencies, and pre-commit hook.
 
 ## Commands
 
