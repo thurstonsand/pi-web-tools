@@ -62,8 +62,12 @@ Pass an optional `objective` to steer extraction, where supported.
 - Repository READMEs
 - Individual files (including `blob` URLs and bare `owner/repo/path` refs)
 - Directories, as a listing
-- Issues and pull requests, with their discussion; PRs also carry the diff
-- Listing out Issues and PRs_: `github.com/{owner}/{repo}/issues` or `/pulls`, optionally with `?q=` in GitHub search syntax, returning up to 100 matches
+- Issues, pull requests, and Discussions, with their conversations; PRs also carry the diff
+- Issue and PR listings: `github.com/{owner}/{repo}/issues` or `/pulls`, optionally with `?q=` in GitHub search syntax, returning up to 100 matches
+- Commits, with metadata, comments, and a patch
+- Releases, including tagged and latest releases, release assets, and release listings
+- Tag and branch listings
+- GitHub Actions run listings and individual runs, including jobs, steps, and artifact metadata
 
 Auth is optional but recommended (see Configuration).
 

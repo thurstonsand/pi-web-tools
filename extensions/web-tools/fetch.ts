@@ -54,7 +54,7 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
       "Fetch specific URLs. Every document's content is written as native files (markdown, patches, source files) under a per-call artifact directory; the tool result is a digest with per-document facts, file paths, and a short excerpt.",
     promptSnippet: "Fetch contents of URLs",
     promptGuidelines: [
-      "Use web_fetch on GitHub URLs for structured responses: issues, PRs, repos, individual files, directories, and repo-level issue and PR lists (including `?q=` GitHub search syntax).",
+      ...fetchers.flatMap((fetcher) => fetcher.promptGuidelines),
       "Use web_fetch when you already have a specific URL and need more than search snippets.",
     ],
     parameters: webFetchParameters,

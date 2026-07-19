@@ -137,6 +137,7 @@ export type ParallelFetchError = {
 export function createParallelFetcher(Parallel: ParallelConstructor): WebFetcher {
   return {
     source: "parallel",
+    promptGuidelines: [],
     canFetch: () => hasParallelApiKey(),
     async fetch({ urls, objective, artifactDir }) {
       const client = createParallelClient(Parallel);

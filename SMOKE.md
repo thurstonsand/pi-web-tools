@@ -13,6 +13,11 @@ Checklist:
 - `web_fetch` a GitHub directory URL.
 - `web_fetch` a GitHub issue URL.
 - `web_fetch` a GitHub pull request URL.
+- `web_fetch` a GitHub commit and confirm `commit.md` and `diff.patch` are written.
+- `web_fetch` tagged, latest, and repository release URLs and confirm release assets and listings.
+- `web_fetch` GitHub tag and branch listing URLs.
+- `web_fetch` a GitHub Actions listing and individual run; confirm jobs and steps are present without downloaded logs.
+- With GitHub authentication available, `web_fetch` a Discussion and confirm its comments and replies.
 - `web_fetch` `https://github.com/{owner}/{repo}/issues` and confirm an open issue listing.
 - `web_fetch` `https://github.com/{owner}/{repo}/pulls?q=is:merged` and confirm a merged PR listing.
 - `web_fetch` an issue search with full-text `?q=`.

@@ -49,6 +49,7 @@ export interface FetcherResult {
 
 export interface WebFetcher {
   source: string;
+  promptGuidelines: string[];
   canFetch(url: string): boolean;
   fetch(request: FetcherRequest): Promise<FetcherResult>;
 }

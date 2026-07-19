@@ -58,6 +58,7 @@ export function createLocalFetcher(client: FetchWorkerClient, extractor: Extract
 
   return {
     source: "local",
+    promptGuidelines: [],
     canFetch: isHttpUrl,
     async fetch({ urls, artifactDir, signal }): Promise<FetcherResult> {
       const documents: FetchedDocument[] = [];

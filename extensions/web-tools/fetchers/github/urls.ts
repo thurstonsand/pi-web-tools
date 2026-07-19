@@ -29,6 +29,31 @@ export type PullRequestTarget = GitHubRepo & {
   number: number;
 };
 
+export type ReleaseTarget = GitHubRepo & {
+  url: string;
+  tag: string;
+};
+
+export type CommitTarget = GitHubRepo & {
+  url: string;
+  ref: string;
+};
+
+export type RepositoryCollectionTarget = GitHubRepo & {
+  url: string;
+  collection: "releases" | "tags" | "branches";
+};
+
+export type ActionRunTarget = GitHubRepo & {
+  url: string;
+  runId: number;
+};
+
+export type DiscussionTarget = GitHubRepo & {
+  url: string;
+  number: number;
+};
+
 export type ListTarget = GitHubRepo & {
   url: string;
   tab: "issues" | "pulls";
@@ -41,19 +66,25 @@ export type RefPathTarget = GitHubRepo & {
   url: string;
 };
 
-export function parseGitHubUrl(
-  url: string,
-):
+export type ParsedGitHubUrl =
   | { type: "file"; target: FileTarget }
   | { type: "readme"; target: GitHubRepo & { url: string } }
   | { type: "directory"; target: DirectoryTarget }
   | { type: "issue"; target: IssueTarget }
   | { type: "pull_request"; target: PullRequestTarget }
+  | { type: "release"; target: ReleaseTarget }
+  | { type: "latest_release"; target: GitHubRepo & { url: string } }
+  | { type: "commit"; target: CommitTarget }
+  | { type: "repository_collection"; target: RepositoryCollectionTarget }
+  | { type: "action_run"; target: ActionRunTarget }
+  | { type: "action_run_list"; target: GitHubRepo & { url: string } }
+  | { type: "discussion"; target: DiscussionTarget }
   | { type: "issue_list"; target: ListTarget }
   | { type: "pull_request_list"; target: ListTarget }
   | { type: "ambiguous_file"; target: RefPathTarget }
-  | { type: "ambiguous_directory"; target: RefPathTarget }
-  | undefined {
+  | { type: "ambiguous_directory"; target: RefPathTarget };
+
+export function parseGitHubUrl(url: string): ParsedGitHubUrl | undefined {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -108,11 +139,57 @@ export function parseGitHubUrl(
       };
     }
 
-    const number = Number.parseInt(numberOrRef, 10);
-    if (!Number.isInteger(number) || number <= 0) return undefined;
+    const number = parsePositiveInteger(numberOrRef);
+    if (!number) return undefined;
     return marker === "issues"
       ? { type: "issue", target: { owner, repo, number, url } }
       : { type: "pull_request", target: { owner, repo, number, url } };
+  }
+
+  if (marker === "releases") {
+    if (!numberOrRef) {
+      return {
+        type: "repository_collection",
+        target: { owner, repo, collection: "releases", url },
+      };
+    }
+    if (numberOrRef === "latest" && rest.length === 0) {
+      return { type: "latest_release", target: { owner, repo, url } };
+    }
+    if (numberOrRef === "tag" && rest.length > 0) {
+      return {
+        type: "release",
+        target: { owner, repo, tag: rest.join("/"), url },
+      };
+    }
+    return undefined;
+  }
+
+  if ((marker === "tags" || marker === "branches") && !numberOrRef) {
+    return {
+      type: "repository_collection",
+      target: { owner, repo, collection: marker, url },
+    };
+  }
+
+  if (marker === "commit" && numberOrRef && rest.length === 0) {
+    return { type: "commit", target: { owner, repo, ref: numberOrRef, url } };
+  }
+
+  if (marker === "actions") {
+    if (!numberOrRef || (numberOrRef === "runs" && rest.length === 0)) {
+      return { type: "action_run_list", target: { owner, repo, url } };
+    }
+    if (numberOrRef !== "runs") return undefined;
+    const runId = parsePositiveInteger(rest[0] ?? "");
+    if (!runId) return undefined;
+    return { type: "action_run", target: { owner, repo, runId, url } };
+  }
+
+  if (marker === "discussions" && numberOrRef && rest.length === 0) {
+    const number = parsePositiveInteger(numberOrRef);
+    if (!number) return undefined;
+    return { type: "discussion", target: { owner, repo, number, url } };
   }
 
   if ((marker === "blob" || marker === "raw") && numberOrRef && rest.length > 0) {
@@ -130,6 +207,12 @@ export function parseGitHubUrl(
   }
 
   return undefined;
+}
+
+function parsePositiveInteger(value: string): number | undefined {
+  if (!/^\d+$/.test(value)) return undefined;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : undefined;
 }
 
 export function isGitHubUrl(url: string): boolean {

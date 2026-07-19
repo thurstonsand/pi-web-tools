@@ -1,16 +1,21 @@
 import { Octokit } from "@octokit/rest";
 import type { FetchedDocument, FetcherResult, FetchFailure, WebFetcher } from "../../contract.ts";
 import { getErrorMessage } from "../../shared.ts";
+import { fetchActionRun, fetchActionRunList } from "./action-run.ts";
 import type { GitHubAuth } from "./auth.ts";
+import { fetchCommit } from "./commit.ts";
 import { fetchDirectory, fetchFile, fetchReadme, resolveRefPath } from "./content.ts";
+import { fetchDiscussion } from "./discussion.ts";
 import { fetchIssue } from "./issue.ts";
 import { fetchListing } from "./listing.ts";
 import { fetchPullRequest } from "./pull-request.ts";
-import { isGitHubUrl, parseGitHubUrl } from "./urls.ts";
+import { fetchLatestRelease, fetchRelease } from "./release.ts";
+import { fetchRepositoryCollection } from "./repository-collection.ts";
+import { isGitHubUrl, type ParsedGitHubUrl, parseGitHubUrl } from "./urls.ts";
 
 type ResolverResult =
   | { status: "resolved"; document: FetchedDocument }
-  | { status: "unsupported"; reason?: string }
+  | { status: "unsupported" }
   | { status: "failed"; reason: string };
 
 // Any console output corrupts pi's interactive TUI (its differential renderer
@@ -29,18 +34,16 @@ export function createGitHubFetcher(auth: GitHubAuth): WebFetcher {
   let clientPromise: Promise<Octokit> | undefined;
 
   async function getClient(): Promise<Octokit> {
-    clientPromise ??= createClient();
+    clientPromise ??= auth.getToken().then(
+      (token) =>
+        new Octokit({
+          ...(token ? { auth: token } : {}),
+          userAgent: "pi-web-tools",
+          log: SILENT_OCTOKIT_LOG,
+          request: { log: SILENT_OCTOKIT_LOG },
+        }),
+    );
     return await clientPromise;
-  }
-
-  async function createClient(): Promise<Octokit> {
-    const token = await auth.getToken();
-    return new Octokit({
-      ...(token ? { auth: token } : {}),
-      userAgent: "pi-web-tools",
-      log: SILENT_OCTOKIT_LOG,
-      request: { log: SILENT_OCTOKIT_LOG },
-    });
   }
 
   async function fetchOne(
@@ -50,7 +53,15 @@ export function createGitHubFetcher(auth: GitHubAuth): WebFetcher {
     artifactDir: string,
   ): Promise<ResolverResult> {
     try {
-      return await fetchGitHubUrl(octokit, url, signal, artifactDir);
+      const parsed = parseGitHubUrl(url);
+      if (!parsed) return { status: "unsupported" };
+      if (parsed.type === "discussion" && !(await auth.getToken())) {
+        return { status: "unsupported" };
+      }
+      return {
+        status: "resolved",
+        document: await resolveGitHubUrl(octokit, parsed, signal, artifactDir),
+      };
     } catch (error) {
       return {
         status: "failed",
@@ -61,6 +72,9 @@ export function createGitHubFetcher(auth: GitHubAuth): WebFetcher {
 
   return {
     source: "github",
+    promptGuidelines: [
+      "Use web_fetch directly on GitHub URLs for source-native API results: repos, files, and directories; issues, PRs, and Discussions with their conversations; commits and patches; tagged and latest releases with asset metadata; Actions runs with jobs and artifacts; and issue, PR, release, tag, branch, and Actions-run listings.",
+    ],
     canFetch: isGitHubUrl,
     async fetch({ urls, signal, artifactDir }): Promise<FetcherResult> {
       if (signal?.aborted) throw new Error("Fetch cancelled.");
@@ -87,60 +101,52 @@ export function createGitHubFetcher(auth: GitHubAuth): WebFetcher {
   };
 }
 
-async function fetchGitHubUrl(
+async function resolveGitHubUrl(
   octokit: Octokit,
-  url: string,
+  parsed: ParsedGitHubUrl,
   signal: AbortSignal | undefined,
   artifactDir: string,
-): Promise<ResolverResult> {
-  const parsed = parseGitHubUrl(url);
-  if (!parsed) return { status: "unsupported", reason: "Unsupported GitHub URL." };
-
+): Promise<FetchedDocument> {
   switch (parsed.type) {
     case "file":
-      return {
-        status: "resolved",
-        document: await fetchFile(octokit, parsed.target, signal, artifactDir),
-      };
+      return await fetchFile(octokit, parsed.target, signal, artifactDir);
     case "readme":
-      return {
-        status: "resolved",
-        document: await fetchReadme(octokit, parsed.target, signal, artifactDir),
-      };
+      return await fetchReadme(octokit, parsed.target, signal, artifactDir);
     case "directory":
-      return {
-        status: "resolved",
-        document: await fetchDirectory(octokit, parsed.target, signal, artifactDir),
-      };
+      return await fetchDirectory(octokit, parsed.target, signal, artifactDir);
     case "issue":
-      return {
-        status: "resolved",
-        document: await fetchIssue(octokit, parsed.target, signal, artifactDir),
-      };
+      return await fetchIssue(octokit, parsed.target, signal, artifactDir);
     case "pull_request":
-      return {
-        status: "resolved",
-        document: await fetchPullRequest(octokit, parsed.target, signal, artifactDir),
-      };
+      return await fetchPullRequest(octokit, parsed.target, signal, artifactDir);
+    case "release":
+      return await fetchRelease(octokit, parsed.target, signal, artifactDir);
+    case "latest_release":
+      return await fetchLatestRelease(octokit, parsed.target, signal, artifactDir);
+    case "commit":
+      return await fetchCommit(octokit, parsed.target, signal, artifactDir);
+    case "repository_collection":
+      return await fetchRepositoryCollection(octokit, parsed.target, signal, artifactDir);
+    case "action_run":
+      return await fetchActionRun(octokit, parsed.target, signal, artifactDir);
+    case "action_run_list":
+      return await fetchActionRunList(octokit, parsed.target, signal, artifactDir);
+    case "discussion":
+      return await fetchDiscussion(octokit, parsed.target, signal, artifactDir);
     case "issue_list":
     case "pull_request_list":
-      return {
-        status: "resolved",
-        document: await fetchListing(octokit, parsed.target, signal, artifactDir),
-      };
+      return await fetchListing(octokit, parsed.target, signal, artifactDir);
     case "ambiguous_file": {
       const resolved = await resolveRefPath(octokit, parsed.target, "file", signal);
-      return {
-        status: "resolved",
-        document: await fetchFile(octokit, { ...resolved, url }, signal, artifactDir),
-      };
+      return await fetchFile(octokit, { ...resolved, url: parsed.target.url }, signal, artifactDir);
     }
     case "ambiguous_directory": {
       const resolved = await resolveRefPath(octokit, parsed.target, "directory", signal);
-      return {
-        status: "resolved",
-        document: await fetchDirectory(octokit, { ...resolved, url }, signal, artifactDir),
-      };
+      return await fetchDirectory(
+        octokit,
+        { ...resolved, url: parsed.target.url },
+        signal,
+        artifactDir,
+      );
     }
   }
 }

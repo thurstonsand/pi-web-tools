@@ -18,11 +18,12 @@ export default async function parallelWebTools(pi: ExtensionAPI) {
   // parallel-web is optional and only useful with an API key; without either,
   // Parallel drops out of both the search tool and the fetch fallback chain.
   const Parallel = hasParallelApiKey() ? await loadParallelConstructor() : null;
+  const githubFetcher = createGitHubFetcher(createGitHubAuth());
   if (Parallel) pi.registerTool(createWebSearchTool(Parallel));
   const workerClient = createFetchWorkerClient(() => loadWebToolsSettings().fetch);
   pi.registerTool(
     createWebFetchTool([
-      createGitHubFetcher(createGitHubAuth()),
+      githubFetcher,
       ...(Parallel ? [createParallelFetcher(Parallel)] : []),
       createLocalFetcher(workerClient, createRehypeExtractor()),
     ]),
