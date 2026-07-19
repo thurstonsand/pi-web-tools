@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.2
+
+### Added
+
+- API-backed `web_fetch` documents for commits; tagged, latest, and repository releases; tag and branch listings; GitHub Actions runs and listings; and Discussions.
+- Native commit patches, release asset metadata, Actions jobs and artifacts, and threaded Discussion conversations as bounded on-disk artifacts.
+
 ## 0.2.1
 
 ### Changed
