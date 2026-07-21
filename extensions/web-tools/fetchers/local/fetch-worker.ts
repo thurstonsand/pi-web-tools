@@ -16,6 +16,7 @@ import {
   type Response,
 } from "playwright-core";
 import { BrowserSession } from "./browser-session.ts";
+import { throwForHttpError } from "./http-status.ts";
 import {
   ensureFetchWorkerDir,
   getFetchWorkerPidPath,
@@ -168,8 +169,11 @@ async function fetchWithPage(
 
   if (response.headers()["cf-mitigated"] === "challenge") {
     const deadlineAt = (challengeWait.startedAt ?? Date.now()) + challengeWait.waitSecs * 1000;
-    await resolveChallenge(page, deadlineAt, challengeWait.escalatable);
+    response = await resolveChallenge(page, deadlineAt, challengeWait.escalatable);
   }
+
+  const finalUrl = page.url();
+  throwForHttpError(response.status(), finalUrl);
 
   // Route on document.contentType, not the response header: the header is set
   // at the whims of the delivery mechanism (react.dev's service worker serves
@@ -180,7 +184,6 @@ async function fetchWithPage(
     (await page.evaluate(() => document.contentType).catch(() => null)) ??
     (await response.headerValue("content-type")) ??
     "";
-  const finalUrl = page.url();
 
   if (isHtmlContentType(contentType)) {
     // Give SPAs a moment to settle, but never fail a page over lingering
@@ -201,9 +204,7 @@ async function fetchWithPage(
   const apiResponse = await page
     .context()
     .request.get(finalUrl, { timeout: NAVIGATION_TIMEOUT_MS });
-  if (!apiResponse.ok()) {
-    throw new Error(`HTTP ${apiResponse.status()} while downloading ${finalUrl}`);
-  }
+  throwForHttpError(apiResponse.status(), finalUrl);
   const body = await apiResponse.body();
   assertWithinCap(body.byteLength);
   const headers = apiResponse.headers();
@@ -237,9 +238,9 @@ async function resolveChallenge(
   page: Page,
   deadlineAt: number,
   escalatable: boolean,
-): Promise<void> {
+): Promise<Response> {
   const remainingMs = () => Math.max(deadlineAt - Date.now(), 1);
-  const resolved = await page
+  const response = await page
     .waitForResponse(
       (response) =>
         response.request().isNavigationRequest() &&
@@ -247,13 +248,13 @@ async function resolveChallenge(
         response.headers()["cf-mitigated"] !== "challenge",
       { timeout: remainingMs() },
     )
-    .then(() => true)
-    .catch(() => false);
-  if (!resolved) {
+    .catch(() => null);
+  if (!response) {
     if (escalatable) throw new ChallengeUnresolvedError();
     throw new Error(CHALLENGE_BLOCKED_MESSAGE);
   }
   await page.waitForLoadState("load", { timeout: remainingMs() }).catch(() => {});
+  return response;
 }
 
 async function handleOpenBrowser(): Promise<void> {
