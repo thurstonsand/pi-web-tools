@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.3
+
+### Fixed
+
+- Local browser fallback now reports HTTP 4xx and 5xx responses as failures instead of extracting error pages as successful documents.
+
 ## 0.2.2
 
 ### Added
