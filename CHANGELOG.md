@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.4
+
+### Added
+
+- API-backed `web_fetch` documents for GitHub commit history, optionally scoped by ref and file path.
+
 ## 0.2.3
 
 ### Fixed
