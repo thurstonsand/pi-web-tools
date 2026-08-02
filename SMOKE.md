@@ -14,6 +14,7 @@ Checklist:
 - `web_fetch` a GitHub issue URL.
 - `web_fetch` a GitHub pull request URL.
 - `web_fetch` a GitHub commit and confirm `commit.md` and `diff.patch` are written.
+- `web_fetch` a GitHub commits URL scoped to a ref and file path and confirm `commits.md` lists that file's history.
 - `web_fetch` tagged, latest, and repository release URLs and confirm release assets and listings.
 - `web_fetch` GitHub tag and branch listing URLs.
 - `web_fetch` a GitHub Actions listing and individual run; confirm jobs and steps are present without downloaded logs.

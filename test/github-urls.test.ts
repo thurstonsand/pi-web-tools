@@ -52,6 +52,23 @@ describe("parseGitHubUrl", () => {
     });
   });
 
+  it("claims commit history, leaving the ref/path split unresolved", () => {
+    expect(parseGitHubUrl("https://github.com/owner/repo/commits")).toMatchObject({
+      type: "commit_list",
+      target: { owner: "owner", repo: "repo", parts: [] },
+    });
+    expect(parseGitHubUrl("https://github.com/owner/repo/commits/main")).toMatchObject({
+      type: "commit_list",
+      target: { parts: ["main"] },
+    });
+    expect(
+      parseGitHubUrl("https://github.com/owner/repo/commits/main/packages/app/CHANGELOG.md"),
+    ).toMatchObject({
+      type: "commit_list",
+      target: { parts: ["main", "packages", "app", "CHANGELOG.md"] },
+    });
+  });
+
   it("claims repository collections and the latest release", () => {
     expect(parseGitHubUrl("https://github.com/owner/repo/releases")).toMatchObject({
       type: "repository_collection",

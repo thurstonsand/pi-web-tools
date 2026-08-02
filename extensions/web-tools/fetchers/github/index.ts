@@ -4,6 +4,7 @@ import { getErrorMessage } from "../../shared.ts";
 import { fetchActionRun, fetchActionRunList } from "./action-run.ts";
 import type { GitHubAuth } from "./auth.ts";
 import { fetchCommit } from "./commit.ts";
+import { fetchCommitList } from "./commit-list.ts";
 import { fetchDirectory, fetchFile, fetchReadme, resolveRefPath } from "./content.ts";
 import { fetchDiscussion } from "./discussion.ts";
 import { fetchIssue } from "./issue.ts";
@@ -73,7 +74,7 @@ export function createGitHubFetcher(auth: GitHubAuth): WebFetcher {
   return {
     source: "github",
     promptGuidelines: [
-      "Use web_fetch directly on GitHub URLs for source-native API results: repos, files, and directories; issues, PRs, and Discussions with their conversations; commits and patches; tagged and latest releases with asset metadata; Actions runs with jobs and artifacts; and issue, PR, release, tag, branch, and Actions-run listings.",
+      "Use web_fetch directly on GitHub URLs for source-native API results: repos, files, and directories; issues, PRs, and Discussions with their conversations; commits and patches; commit history for a repo, branch, or file path; tagged and latest releases with asset metadata; Actions runs with jobs and artifacts; and issue, PR, release, tag, branch, and Actions-run listings.",
     ],
     canFetch: isGitHubUrl,
     async fetch({ urls, signal, artifactDir }): Promise<FetcherResult> {
@@ -124,6 +125,8 @@ async function resolveGitHubUrl(
       return await fetchLatestRelease(octokit, parsed.target, signal, artifactDir);
     case "commit":
       return await fetchCommit(octokit, parsed.target, signal, artifactDir);
+    case "commit_list":
+      return await fetchCommitList(octokit, parsed.target, signal, artifactDir);
     case "repository_collection":
       return await fetchRepositoryCollection(octokit, parsed.target, signal, artifactDir);
     case "action_run":

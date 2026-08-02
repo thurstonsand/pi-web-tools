@@ -65,6 +65,7 @@ Pass an optional `objective` to steer extraction, where supported.
 - Issues, pull requests, and Discussions, with their conversations; PRs also carry the diff
 - Issue and PR listings: `github.com/{owner}/{repo}/issues` or `/pulls`, optionally with `?q=` in GitHub search syntax, returning up to 100 matches
 - Commits, with metadata, comments, and a patch
+- Commit history: `github.com/{owner}/{repo}/commits`, optionally scoped by ref and file path, returning up to 100 commits
 - Releases, including tagged and latest releases, release assets, and release listings
 - Tag and branch listings
 - GitHub Actions run listings and individual runs, including jobs, steps, and artifact metadata
@@ -80,8 +81,6 @@ Auth is optional but recommended (see Configuration).
 ```bash
 mise run check   # lint, format, typecheck, test
 ```
-
-See `DEV.md` for commands and project layout, `SMOKE.md` for the manual smoke checklist, and `CONTEXT.md` for project vocabulary.
 
 ## License
 

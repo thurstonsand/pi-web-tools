@@ -39,6 +39,11 @@ export type CommitTarget = GitHubRepo & {
   ref: string;
 };
 
+export type CommitListTarget = GitHubRepo & {
+  url: string;
+  parts: string[];
+};
+
 export type RepositoryCollectionTarget = GitHubRepo & {
   url: string;
   collection: "releases" | "tags" | "branches";
@@ -75,6 +80,7 @@ export type ParsedGitHubUrl =
   | { type: "release"; target: ReleaseTarget }
   | { type: "latest_release"; target: GitHubRepo & { url: string } }
   | { type: "commit"; target: CommitTarget }
+  | { type: "commit_list"; target: CommitListTarget }
   | { type: "repository_collection"; target: RepositoryCollectionTarget }
   | { type: "action_run"; target: ActionRunTarget }
   | { type: "action_run_list"; target: GitHubRepo & { url: string } }
@@ -174,6 +180,13 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | undefined {
 
   if (marker === "commit" && numberOrRef && rest.length === 0) {
     return { type: "commit", target: { owner, repo, ref: numberOrRef, url } };
+  }
+
+  if (marker === "commits") {
+    return {
+      type: "commit_list",
+      target: { owner, repo, parts: numberOrRef ? [numberOrRef, ...rest] : [], url },
+    };
   }
 
   if (marker === "actions") {
