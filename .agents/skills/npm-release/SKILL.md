@@ -16,6 +16,7 @@ Use this skill when preparing and publishing a new release for `pi-web-tools`.
 - Stable releases are `vX.Y.Z` tags.
 - Stable package tags are immutable. Never force-push a stable release tag.
 - The GitHub Action uses npm Trusted Publishing through OIDC.
+- The `downgrade` branch tracks `main` with specific downgrades needed for a limited environment.
 
 ## 1. Inspect release state
 
@@ -111,10 +112,39 @@ git ls-remote --tags origin "v${VERSION}"
 git status --short
 ```
 
+## 9. Rebase the `downgrade` branch
+
+The constrained environment installs this package with `pi install git:github.com/thurstonsand/pi-web-tools@downgrade`, and `pi update` hard-resets that clone to the branch tip. The branch must therefore carry the release, or that install stays on the previous version.
+
+Find where the branch is checked out with `git worktree list`. If nothing has it, ask the user how to proceed rather than choosing for them — create a worktree, and where, or switch the main worktree to the branch and back afterward.
+
+```sh
+git fetch origin
+git rebase "v${VERSION}"
+git push --force-with-lease origin downgrade
+```
+
+Force-pushing is correct here. Pi resets rather than pulls, so rewritten history costs the downstream install nothing.
+
+For the same reason, the branch keeps a single pin commit on top of `main`. Amend it when pins change instead of stacking new commits — the history is rewritten at every release anyway, and a flat branch makes the diff against `main` the whole story.
+
+The branch diverges from `main` in `package-lock.json`, and in `package.json` wherever a pin needs it — a transitive pin needs an `overrides` entry, and a direct pin needs a narrowed range once `main`'s range stops admitting the pinned version. Never merge a lockfile conflict by hand — take the release side, then re-apply every pin listed in `PINS.md` and confirm with `npm ls` before pushing.
+
+### Check pin freshness
+
+Read `PINS.md` on the `downgrade` branch. Confirm each row's `main` wants column still describes what the release actually resolves to — it drifts every time a range or a transitive resolution moves, and a stale column hides the fact that a pin is now doing more work than it was meant to.
+
+Then check the `recheck after` dates. If any have passed, do not silently rebase past them — report which pins are due, so the user can retest the unpinned version in the constrained environment with `npm view <pkg> versions` against the mirror. They either drop the pin or renew it.
+
+Set `recheck after` two months out whenever a pin is added or renewed. Long enough that it does not nag at every release, short enough that a mirror catching up gets noticed while the version gap is still small.
+
+## 10. Final report
+
 Final report should include:
 
 - npm version published
 - release commit hash and tag
 - workflow watched and whether it passed
 - verification status
+- `downgrade` branch rebased and pushed, plus any pins now due for recheck
 - any follow-up work or issues encountered
