@@ -43,7 +43,7 @@
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
-    "playwright-core": "^1.61.0",
+    "playwright-core": "1.63.0",
     "rehype-parse": "^9.0.1",
     "rehype-remark": "^10.0.1",
     "remark-gfm": "^4.0.1",
@@ -74,5 +74,13 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "overrides": {
+    "@octokit/core": "7.0.7",
+    "@octokit/endpoint": "11.0.4",
+    "@octokit/graphql": "9.0.4",
+    "@octokit/request": "10.0.13",
+    "@octokit/request-error": "7.1.1",
+    "json-with-bigint": "3.5.11"
   }
 }
