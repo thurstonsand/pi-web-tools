@@ -52,6 +52,21 @@ describe("parseGitHubUrl", () => {
     });
   });
 
+  it("strips the .diff/.patch format suffix from commits and pull requests", () => {
+    expect(parseGitHubUrl("https://github.com/owner/repo/commit/deadbeef.patch")).toMatchObject({
+      type: "commit",
+      target: { ref: "deadbeef" },
+    });
+    expect(parseGitHubUrl("https://github.com/owner/repo/commit/deadbeef.diff")).toMatchObject({
+      type: "commit",
+      target: { ref: "deadbeef" },
+    });
+    expect(parseGitHubUrl("https://github.com/owner/repo/pull/12.patch")).toMatchObject({
+      type: "pull_request",
+      target: { number: 12 },
+    });
+  });
+
   it("claims commit history, leaving the ref/path split unresolved", () => {
     expect(parseGitHubUrl("https://github.com/owner/repo/commits")).toMatchObject({
       type: "commit_list",

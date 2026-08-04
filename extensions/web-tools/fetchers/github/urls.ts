@@ -145,7 +145,9 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | undefined {
       };
     }
 
-    const number = parsePositiveInteger(numberOrRef);
+    const number = parsePositiveInteger(
+      marker === "issues" ? numberOrRef : stripDiffFormat(numberOrRef),
+    );
     if (!number) return undefined;
     return marker === "issues"
       ? { type: "issue", target: { owner, repo, number, url } }
@@ -179,7 +181,7 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | undefined {
   }
 
   if (marker === "commit" && numberOrRef && rest.length === 0) {
-    return { type: "commit", target: { owner, repo, ref: numberOrRef, url } };
+    return { type: "commit", target: { owner, repo, ref: stripDiffFormat(numberOrRef), url } };
   }
 
   if (marker === "commits") {
@@ -220,6 +222,12 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | undefined {
   }
 
   return undefined;
+}
+
+// GitHub serves `.diff`/`.patch` variants of commit and pull request URLs. They
+// address the same object, and its structured view already carries the patch.
+function stripDiffFormat(value: string): string {
+  return value.replace(/\.(?:diff|patch)$/, "");
 }
 
 function parsePositiveInteger(value: string): number | undefined {
