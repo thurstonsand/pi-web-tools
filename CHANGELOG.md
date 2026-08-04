@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.5
+
+### Fixed
+
+- GitHub commit and pull request URLs ending in `.diff` or `.patch` now resolve to the same structured `web_fetch` document as their plain form, instead of falling through to a general web fetcher.
+
 ## 0.2.4
 
 ### Added
