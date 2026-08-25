@@ -48,7 +48,8 @@
       "groupSlug": "hk"
     },
     {
-      "description": "typebox tracks the version pi bundles, not the newest release. test/typebox-pin.test.ts fails when pi moves its pin, which is the signal to bump this by hand.",
+      "description": "Pinned to the version pi ships. Pi's extension loader aliases typebox to its own bundled copy, so our declaration only types what pi executes and must match it. It moves when pi moves, not on Renovate's schedule; the typebox pin test reports when that happens.",
+      "matchManagers": ["npm"],
       "matchPackageNames": ["typebox"],
       "enabled": false
     }
