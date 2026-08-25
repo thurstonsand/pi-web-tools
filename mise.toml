@@ -8,7 +8,7 @@ enter = "mise bootstrap --yes --quiet"
 
 [tools]
 actionlint = "1.7.12"
-hk = "1.54.0"
+hk = "1.56.1"
 node = "lts"
 
 [env]
