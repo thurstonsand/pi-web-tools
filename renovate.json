@@ -46,6 +46,11 @@
       "matchPackageNames": ["jdx/hk"],
       "groupName": "hk",
       "groupSlug": "hk"
+    },
+    {
+      "description": "typebox tracks the version pi bundles, not the newest release. test/typebox-pin.test.ts fails when pi moves its pin, which is the signal to bump this by hand.",
+      "matchPackageNames": ["typebox"],
+      "enabled": false
     }
   ]
 }
