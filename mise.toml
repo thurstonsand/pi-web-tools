@@ -7,8 +7,7 @@ experimental = true
 enter = "mise bootstrap --yes --quiet"
 
 [tools]
-actionlint = "1.7.12"
-hk = "1.54.0"
+hk = "1.56.1"
 node = "lts"
 
 [env]
@@ -29,7 +28,7 @@ quiet = true
 
 [tasks.lint]
 description = "Lint"
-depends = ["lint:biome", "lint:actions"]
+depends = ["lint:*"]
 
 [tasks."lint:biome"]
 description = "Lint TypeScript and JSON"
@@ -38,6 +37,7 @@ run = "biome check ."
 [tasks."lint:actions"]
 description = "Lint GitHub Actions workflows"
 run = "actionlint"
+tools.actionlint = "1.7.12"
 
 [tasks.format]
 description = "Format and apply safe fixes"
@@ -54,3 +54,13 @@ run = "vitest run"
 [tasks.check]
 description = "Run full verification"
 depends = ["lint", "typecheck", "test"]
+
+[tasks.renovate]
+description = "Run Renovate"
+run = "renovate"
+tools.node = "24"
+tools."npm:renovate" = { version = "44.5.3", allow_builds = [
+  "re2",
+], trust_policy_excludes = [
+  "@yarnpkg/libzip@3.2.2",
+] }
