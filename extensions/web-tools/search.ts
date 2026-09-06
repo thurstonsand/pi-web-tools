@@ -4,11 +4,10 @@ import { Type } from "typebox";
 import {
   buildSearchSummary,
   clampMaxResults,
-  createParallelClient,
   DEFAULT_MAX_RESULTS,
   DEFAULT_SEARCH_MODE,
   normalizeSearchQueries,
-  type ParallelConstructor,
+  type ParallelClientFactory,
   validateAfterDate,
 } from "./fetchers/parallel.ts";
 import {
@@ -72,7 +71,7 @@ const webSearchParameters = Type.Object({
   ),
 });
 
-export function createWebSearchTool(Parallel: ParallelConstructor) {
+export function createWebSearchTool(createClient: ParallelClientFactory) {
   return defineTool({
     name: "web_search",
     label: "Search Web",
@@ -80,7 +79,7 @@ export function createWebSearchTool(Parallel: ParallelConstructor) {
     promptSnippet: "Search the web for sources and current information",
     promptGuidelines: ["Prefer a focused objective and 1-5 specific queries for web_search."],
     parameters: webSearchParameters,
-    execute: async (_toolCallId, params, _signal, onUpdate) => {
+    execute: async (_toolCallId, params, signal, onUpdate) => {
       const searchQueries = normalizeSearchQueries(params.search_queries, params.objective);
 
       onUpdate?.({
@@ -89,8 +88,8 @@ export function createWebSearchTool(Parallel: ParallelConstructor) {
       });
 
       try {
-        const client = createParallelClient(Parallel);
         const afterDate = validateAfterDate(params.after_date);
+        const client = await createClient(signal);
         const result = await client.search({
           objective: params.objective,
           search_queries: searchQueries,

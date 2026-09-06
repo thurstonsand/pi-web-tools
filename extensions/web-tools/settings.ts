@@ -16,6 +16,11 @@ const CHALLENGE_SETTINGS_SCHEMA = Type.Object({
 });
 
 const WEB_TOOLS_SETTINGS_SCHEMA = Type.Object({
+  parallel: Type.Optional(
+    Type.Object({
+      apiKeyCommand: Type.Optional(Type.String({ pattern: "\\S" })),
+    }),
+  ),
   fetch: Type.Optional(
     Type.Object({
       browser: Type.Optional(BROWSER_SETTINGS_SCHEMA),
@@ -47,6 +52,7 @@ export interface FetchSettings {
 }
 
 export interface WebToolsSettings {
+  parallel: { apiKeyCommand: string | undefined };
   fetch: FetchSettings;
 }
 
@@ -91,6 +97,7 @@ export function resolveWebToolsSettings(fileSettings: WebToolsFileSettings): Web
   const browser = fileSettings.fetch?.browser ?? {};
   const challenge = fileSettings.fetch?.challenge ?? {};
   return {
+    parallel: { apiKeyCommand: fileSettings.parallel?.apiKeyCommand },
     fetch: {
       browser: {
         executablePath: normalizeAbsolutePath(browser.executablePath, "executablePath"),

@@ -21,13 +21,13 @@ pi -e ./extensions/web-tools.ts
 
 ## Configuration
 
-| What             | Source                              | Required   |
-| ---------------- | ----------------------------------- | ---------- |
-| Parallel API key | `PARALLEL_API_KEY`                  | for search |
-| GitHub token     | `GH_TOKEN`, token file, or `gh` CLI | no         |
-| Fetch browser    | pi global settings                  | no         |
+| What             | Source                                   | Required   |
+| ---------------- | ---------------------------------------- | ---------- |
+| Parallel API key | `PARALLEL_API_KEY` or pi global settings | for search |
+| GitHub token     | `GH_TOKEN`, token file, or `gh` CLI      | no         |
+| Fetch browser    | pi global settings                       | no         |
 
-- **Parallel API key** enables `web_search` and the Parallel fetch backend. Without it, `web_search` is not registered and fetches fall through to the local browser.
+- **Parallel API key** enables `web_search` and the Parallel fetch backend. Set `PARALLEL_API_KEY` or configure a key command `webTools.parallel.apiKeyCommand: "bash command"`. Without either, `web_search` is not registered and fetches fall through to the local browser.
 - **GitHub token** raises rate limits and reaches private repos. Resolved from `GH_TOKEN`, then `~/.pi/agent/github-token`, then `gh auth token`. Public URLs work without it.
 - **Fetch browser** settings live under `webTools.fetch.browser` (`executablePath`, `profileDir`). They point the local browser at a specific Chrome binary and profile, defaulting to a managed profile under `~/.pi/agent/browser-profile`.
 - **Bot-wall challenges** are handled under `webTools.fetch.challenge` (`escalation`, `headlessWaitSecs`, `headedWaitSecs`). When a Cloudflare challenge doesn't resolve headless within `headlessWaitSecs` (default 10), the worker briefly opens a visible browser window to let it pass — waiting up to `headedWaitSecs` (default 20) — then returns to headless. Set `escalation: "never"` to fail such fetches instead.
@@ -72,7 +72,7 @@ Pass an optional `objective` to steer extraction, where supported.
 
 Auth is optional but recommended (see Configuration).
 
-**Parallel** — general-purpose web extraction for anything that is not GitHub. Optimized for agent output. Requires `PARALLEL_API_KEY`; without the key it just falls through to the next fetcher.
+**Parallel** — general-purpose web extraction for anything that is not GitHub. Optimized for agent output. Requires `PARALLEL_API_KEY` or `webTools.parallel.apiKeyCommand`; without either source it falls through to the next fetcher.
 
 **Local** — a browser-backed fallback that fetches with [`playwright-core`](https://github.com/microsoft/playwright) and converts HTML to markdown with a [rehype](https://github.com/rehypejs/rehype) pipeline. It can access pages behind a login (if the user invokes the interactive browser via `/browser open` and logs in), and download non-html files such as PDFs.
 

@@ -1,3 +1,5 @@
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 import type ParallelClient from "parallel-web";
 import type { FetchedDocument, FetchWarning, WebFetcher } from "../contract.ts";
 import { formatWarnings, writeDocumentBody } from "../shared.ts";
@@ -8,6 +10,9 @@ export const DEFAULT_MAX_RESULTS = 5;
 export const MAX_MAX_RESULTS = 8;
 
 export type ParallelConstructor = typeof import("parallel-web").default;
+export type ParallelClientFactory = (signal: AbortSignal | undefined) => Promise<ParallelClient>;
+
+const execAsync = promisify(exec);
 
 // parallel-web is an optional dependency. A dynamic import keeps the extension
 // loadable when the SDK is absent; callers treat null as "no Parallel backend".
@@ -20,14 +25,35 @@ export async function loadParallelConstructor(): Promise<ParallelConstructor | n
   }
 }
 
-export function hasParallelApiKey(): boolean {
-  return Boolean(process.env[API_KEY_ENV]);
+export function hasParallelCredentials(apiKeyCommand: string | undefined): boolean {
+  return Boolean(process.env[API_KEY_ENV]?.trim() || apiKeyCommand);
 }
 
-export function createParallelClient(Parallel: ParallelConstructor): ParallelClient {
-  const apiKey = process.env[API_KEY_ENV];
+export async function createParallelClient(
+  Parallel: ParallelConstructor,
+  apiKeyCommand: string | undefined,
+  signal: AbortSignal | undefined,
+): Promise<ParallelClient> {
+  let apiKey = process.env[API_KEY_ENV]?.trim();
+  if (!apiKey && apiKeyCommand) {
+    try {
+      const command = execAsync(apiKeyCommand, {
+        timeout: 30_000,
+        maxBuffer: 64 * 1024,
+        signal,
+      });
+      command.child.stdin?.end();
+      apiKey = (await command).stdout.trim();
+    } catch {
+      // Subprocess errors include the command and output, which may contain credentials.
+      throw new Error("Parallel API key command failed");
+    }
+    if (!apiKey || /\s/.test(apiKey)) {
+      throw new Error("Parallel API key command must return a single nonempty key");
+    }
+  }
   if (!apiKey) {
-    throw new Error(`${API_KEY_ENV} is not set`);
+    throw new Error("Parallel credentials are not configured");
   }
   return new Parallel({ apiKey });
 }
@@ -134,13 +160,13 @@ export type ParallelFetchError = {
   content?: string | null;
 };
 
-export function createParallelFetcher(Parallel: ParallelConstructor): WebFetcher {
+export function createParallelFetcher(createClient: ParallelClientFactory): WebFetcher {
   return {
     source: "parallel",
     promptGuidelines: [],
-    canFetch: () => hasParallelApiKey(),
-    async fetch({ urls, objective, artifactDir }) {
-      const client = createParallelClient(Parallel);
+    canFetch: () => true,
+    async fetch({ urls, objective, artifactDir, signal }) {
+      const client = await createClient(signal);
       const result = await client.extract({
         urls,
         ...(objective ? { objective } : {}),

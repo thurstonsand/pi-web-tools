@@ -2,22 +2,18 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type ParallelClient from "parallel-web";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   canonicalUrl,
   createParallelFetcher,
-  type ParallelConstructor,
+  type ParallelClientFactory,
 } from "../extensions/web-tools/fetchers/parallel.ts";
 
 const ctx = {} as ExtensionContext;
 
-function fakeParallel(extractResult: unknown): ParallelConstructor {
-  return class {
-    beta = {
-      extract: async () => extractResult,
-    };
-    extract = async () => extractResult;
-  } as unknown as ParallelConstructor;
+function fakeParallel(extractResult: unknown): ParallelClientFactory {
+  return async () => ({ extract: async () => extractResult }) as unknown as ParallelClient;
 }
 
 describe("canonicalUrl", () => {
@@ -40,12 +36,7 @@ describe("createParallelFetcher", () => {
   let artifactDir: string;
 
   beforeEach(async () => {
-    process.env.PARALLEL_API_KEY = "test-key";
     artifactDir = await mkdtemp(path.join(tmpdir(), "parallel-fetch-test-"));
-  });
-
-  afterEach(() => {
-    delete process.env.PARALLEL_API_KEY;
   });
 
   it("matches results to requested urls when returned out of order", async () => {

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.0
+
+### Added
+
+- Configure `webTools.parallel.apiKeyCommand` in global pi settings to retrieve Parallel credentials only when a search or extraction runs. `PARALLEL_API_KEY` still takes precedence.
+
+### Changed
+
+- Create Parallel clients per request instead of at startup, allowing credential commands to return fresh keys without changing the process environment.
+- Refresh dependencies and align development tooling with Node 24.
+
 ## 0.2.5
 
 ### Fixed

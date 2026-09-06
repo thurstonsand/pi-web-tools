@@ -6,8 +6,9 @@ import { createLocalFetcher } from "./web-tools/fetchers/local/local.ts";
 import { createRehypeExtractor } from "./web-tools/fetchers/local/local-extractor.ts";
 import { createFetchWorkerClient } from "./web-tools/fetchers/local/worker-connection.ts";
 import {
+  createParallelClient,
   createParallelFetcher,
-  hasParallelApiKey,
+  hasParallelCredentials,
   loadParallelConstructor,
 } from "./web-tools/fetchers/parallel.ts";
 import { createWebSearchTool } from "./web-tools/search.ts";
@@ -15,16 +16,18 @@ import { loadWebToolsSettings } from "./web-tools/settings.ts";
 import { getErrorMessage } from "./web-tools/shared.ts";
 
 export default async function parallelWebTools(pi: ExtensionAPI) {
-  // parallel-web is optional and only useful with an API key; without either,
-  // Parallel drops out of both the search tool and the fetch fallback chain.
-  const Parallel = hasParallelApiKey() ? await loadParallelConstructor() : null;
+  const { apiKeyCommand } = loadWebToolsSettings().parallel;
+  const Parallel = hasParallelCredentials(apiKeyCommand) ? await loadParallelConstructor() : null;
+  const createClient = Parallel
+    ? (signal: AbortSignal | undefined) => createParallelClient(Parallel, apiKeyCommand, signal)
+    : null;
   const githubFetcher = createGitHubFetcher(createGitHubAuth());
-  if (Parallel) pi.registerTool(createWebSearchTool(Parallel));
+  if (createClient) pi.registerTool(createWebSearchTool(createClient));
   const workerClient = createFetchWorkerClient(() => loadWebToolsSettings().fetch);
   pi.registerTool(
     createWebFetchTool([
       githubFetcher,
-      ...(Parallel ? [createParallelFetcher(Parallel)] : []),
+      ...(createClient ? [createParallelFetcher(createClient)] : []),
       createLocalFetcher(workerClient, createRehypeExtractor()),
     ]),
   );
