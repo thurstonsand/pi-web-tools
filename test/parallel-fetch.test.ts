@@ -44,9 +44,10 @@ describe("createParallelFetcher", () => {
     const fetcher = createParallelFetcher(
       fakeParallel({
         results: [
-          { url: "https://example.com/second", full_content: "second content" },
-          { url: "https://example.com/first", full_content: "first content" },
+          { url: "https://example.com/second", full_content: "second content", excerpts: [] },
+          { url: "https://example.com/first", full_content: "first content", excerpts: [] },
         ],
+        errors: [],
       }),
     );
 
@@ -59,9 +60,9 @@ describe("createParallelFetcher", () => {
     const firstBody = documents.find((doc) => doc.url === "https://example.com/first")?.bodies[0];
     expect(firstBody).toBeDefined();
     if (!firstBody) return;
-    const body = await readFile(path.join(artifactDir, firstBody.path), "utf8");
+    const body = await readFile(firstBody.path, "utf8");
     expect(body).toBe("first content");
-    expect(firstBody.path).toContain("example-com-first");
+    expect(firstBody.path).toBe(path.join(artifactDir, "example-com-first", "content.md"));
   });
 
   it("maps percent-encoded result urls back to the requested url", async () => {
@@ -72,8 +73,10 @@ describe("createParallelFetcher", () => {
           {
             url: "https://en.wikipedia.org/wiki/Transformer_%28deep_learning_architecture%29",
             full_content: "wiki content",
+            excerpts: [],
           },
         ],
+        errors: [],
       }),
     );
 
@@ -85,7 +88,10 @@ describe("createParallelFetcher", () => {
   it("falls back to the item url when nothing matches", async () => {
     const fetcher = createParallelFetcher(
       fakeParallel({
-        results: [{ url: "https://redirected.example.com/", full_content: "content" }],
+        results: [
+          { url: "https://redirected.example.com/", full_content: "content", excerpts: [] },
+        ],
+        errors: [],
       }),
     );
 

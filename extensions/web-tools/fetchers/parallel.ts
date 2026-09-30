@@ -1,6 +1,8 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import type ParallelClient from "parallel-web";
+import { Type } from "typebox";
+import { parseTypeBoxValue } from "../../shared/typebox.ts";
 import type { FetchedDocument, FetchWarning, WebFetcher } from "../contract.ts";
 import { formatWarnings, writeDocumentBody } from "../shared.ts";
 
@@ -86,30 +88,81 @@ export function validateAfterDate(afterDate: string | undefined): string | undef
   return afterDate;
 }
 
-export function formatExtractErrors(
-  errors:
-    | Array<{
-        url: string;
-        error_type?: string | null;
-        http_status_code?: number | null;
-        content?: string | null;
-      }>
-    | undefined
-    | null,
-): string[] {
-  if (!errors?.length) return [];
-  return errors.map(formatParallelError);
+const nullableString = Type.Union([Type.String(), Type.Null()]);
+
+const parallelWarnings = Type.Optional(
+  Type.Union([
+    Type.Array(Type.Object({ message: Type.String(), type: Type.String() })),
+    Type.Null(),
+  ]),
+);
+
+const parallelSearchResponse = Type.Object({
+  results: Type.Array(
+    Type.Object({
+      url: Type.String(),
+      title: Type.Optional(nullableString),
+      publish_date: Type.Optional(nullableString),
+      excerpts: Type.Array(Type.String()),
+    }),
+  ),
+  warnings: parallelWarnings,
+});
+
+const parallelExtractResponse = Type.Object({
+  results: Type.Array(
+    Type.Object({
+      url: Type.String(),
+      title: Type.Optional(nullableString),
+      publish_date: Type.Optional(nullableString),
+      excerpts: Type.Array(Type.String()),
+      full_content: Type.Optional(nullableString),
+    }),
+  ),
+  errors: Type.Array(
+    Type.Object({
+      url: Type.String(),
+      error_type: Type.String(),
+      http_status_code: Type.Union([Type.Number(), Type.Null()]),
+      content: nullableString,
+    }),
+  ),
+  warnings: parallelWarnings,
+});
+
+type ParallelExtractError = {
+  url: string;
+  error_type: string;
+  http_status_code: number | null;
+  content: string | null;
+};
+
+export type ParallelSearchHit = {
+  url: string;
+  title?: string;
+  publish_date?: string;
+  excerpts: string[];
+};
+
+export type ParallelSearchResult = {
+  results: ParallelSearchHit[];
+  warnings: FetchWarning[];
+};
+
+export function parseParallelSearchResponse(response: unknown): ParallelSearchResult {
+  const parsed = parseTypeBoxValue(parallelSearchResponse, response, "Parallel search response");
+  return {
+    results: parsed.results.map(({ url, title, publish_date, excerpts }) => ({
+      url,
+      ...(title != null ? { title } : {}),
+      ...(publish_date != null ? { publish_date } : {}),
+      excerpts,
+    })),
+    warnings: (parsed.warnings ?? []).map(({ message, type }) => ({ message, type })),
+  };
 }
 
-export function buildSearchSummary(
-  results: Array<{
-    title?: string | null;
-    url: string;
-    publish_date?: string | null;
-    excerpts?: string[] | null;
-  }>,
-  warnings?: Array<{ message?: string | null; type?: string | null }> | null,
-): string {
+export function buildSearchSummary(results: ParallelSearchHit[], warnings: FetchWarning[]): string {
   const warningLines = formatWarnings(warnings);
   const resultText =
     results.length === 0
@@ -118,11 +171,9 @@ export function buildSearchSummary(
           .map((result, index) => {
             const title = result.title?.trim() || result.url;
             const publishDate = result.publish_date ? ` (${result.publish_date})` : "";
-            const excerpts = (result.excerpts ?? []).map((excerpt, excerptIndex) => {
+            const excerpts = result.excerpts.map((excerpt, excerptIndex) => {
               const prefix =
-                result.excerpts && result.excerpts.length > 1
-                  ? `   Excerpt ${excerptIndex + 1}: `
-                  : "   ";
+                result.excerpts.length > 1 ? `   Excerpt ${excerptIndex + 1}: ` : "   ";
               return `${prefix}${excerpt}`;
             });
             return [`${index + 1}. ${title}${publishDate}`, `   ${result.url}`, ...excerpts].join(
@@ -140,26 +191,6 @@ export interface ParallelDocument extends FetchedDocument {
   source: "parallel";
 }
 
-export type ParallelFetchResultItem = {
-  url: string;
-  title?: string | null;
-  publish_date?: string | null;
-  excerpts?: string[] | null;
-  full_content?: string | null;
-};
-
-export type ParallelFetchWarning = {
-  message?: string | null;
-  type?: string | null;
-};
-
-export type ParallelFetchError = {
-  url: string;
-  error_type?: string | null;
-  http_status_code?: number | null;
-  content?: string | null;
-};
-
 export function createParallelFetcher(createClient: ParallelClientFactory): WebFetcher {
   return {
     source: "parallel",
@@ -167,19 +198,15 @@ export function createParallelFetcher(createClient: ParallelClientFactory): WebF
     canFetch: () => true,
     async fetch({ urls, objective, artifactDir, signal }) {
       const client = await createClient(signal);
-      const result = await client.extract({
-        urls,
-        ...(objective ? { objective } : {}),
-        advanced_settings: { full_content: true },
-      });
-
-      const results = Array.isArray(result.results)
-        ? (result.results as ParallelFetchResultItem[])
-        : [];
-      const warnings = Array.isArray(result.warnings)
-        ? normalizeParallelWarnings(result.warnings as ParallelFetchWarning[])
-        : [];
-      const errors = Array.isArray(result.errors) ? (result.errors as ParallelFetchError[]) : [];
+      const { results, errors, warnings } = parseTypeBoxValue(
+        parallelExtractResponse,
+        await client.extract({
+          urls,
+          ...(objective ? { objective } : {}),
+          advanced_settings: { full_content: true },
+        }),
+        "Parallel extract response",
+      );
 
       // Parallel returns results in completion order, not request order, so
       // positional mapping misattributes content. Match each result back to
@@ -203,14 +230,14 @@ export function createParallelFetcher(createClient: ParallelClientFactory): WebF
             facts: item.publish_date ? [`published ${item.publish_date}`] : [],
             // With an objective, Parallel's excerpts are the steered answer the
             // agent asked for — deliver all of them uncapped as highlights.
-            ...(objective ? { highlights: item.excerpts ?? [] } : { excerpt: item.excerpts?.[0] }),
+            ...(objective ? { highlights: item.excerpts } : { excerpt: item.excerpts[0] }),
             bodies: [body],
           };
         }),
       );
       return {
         documents,
-        warnings,
+        warnings: formatWarnings(warnings).map((message) => ({ type: "parallel", message })),
         failures: errors.map((error) => ({
           url: error.url,
           reason: formatParallelError(error),
@@ -237,14 +264,9 @@ export function canonicalUrl(url: string): string {
   return href.endsWith("/") ? href.slice(0, -1) : href;
 }
 
-function normalizeParallelWarnings(warnings: ParallelFetchWarning[]): FetchWarning[] {
-  return formatWarnings(warnings).map((message) => ({ type: "parallel", message }));
-}
-
-function formatParallelError(error: ParallelFetchError): string {
-  const bits = [];
-  if (error.error_type) bits.push(`type=${error.error_type}`);
+function formatParallelError(error: ParallelExtractError): string {
+  const bits = [`type=${error.error_type}`];
   if (error.http_status_code != null) bits.push(`status=${error.http_status_code}`);
   if (error.content?.trim()) bits.push(`content=${error.content.trim()}`);
-  return bits.join(" | ") || "extraction failed";
+  return bits.join(" | ");
 }

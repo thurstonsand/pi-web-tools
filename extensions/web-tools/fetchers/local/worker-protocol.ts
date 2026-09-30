@@ -60,7 +60,7 @@ export interface WorkerHeartbeatEvent {
 
 export interface WorkerFetchResult {
   finalUrl: string;
-  file: string;
+  name: string; // file name within the request's downloadDir
   contentType: string;
   bytes: number;
   title?: string;

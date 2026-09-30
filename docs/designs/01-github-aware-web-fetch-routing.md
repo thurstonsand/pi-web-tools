@@ -162,7 +162,6 @@ interface UrlOutcome {
 interface RoutedFetchResult {
   outcomes: UrlOutcome[];    // request order; one entry per requested URL
   warnings: FetchWarning[];  // fetcher-level diagnostics; surfaced in details only
-  artifactRoot: string;
 }
 ```
 

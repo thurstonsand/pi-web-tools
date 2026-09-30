@@ -21,6 +21,17 @@ import { createFetchWorkerClient } from "../extensions/web-tools/fetchers/local/
 
 class FakeSocket extends Duplex {
   readonly writes: string[] = [];
+  holdsProcess = true;
+
+  ref(): this {
+    this.holdsProcess = true;
+    return this;
+  }
+
+  unref(): this {
+    this.holdsProcess = false;
+    return this;
+  }
 
   _read(): void {}
 
@@ -104,12 +115,36 @@ describe("fetch worker connection liveness", () => {
       event: "result",
       op: "fetch",
       finalUrl: "https://example.com/",
-      file: "/tmp/worker-connection-test/page.html",
+      name: "page.html",
       contentType: "text/html",
       bytes: 1,
     });
 
     await expect(fetch).resolves.toMatchObject({ finalUrl: "https://example.com/" });
+    expect(socket.destroyed).toBe(false);
+  });
+
+  it("holds the process only while a request is pending", async () => {
+    const socket = new FakeSocket();
+    connectTo(socket);
+    const client = createFetchWorkerClient(settings);
+
+    const fetch = client.fetch("https://example.com", "/tmp/worker-connection-test");
+    await until(() => socket.writes.length === 1);
+    expect(socket.holdsProcess).toBe(true);
+
+    socket.feed({
+      id: JSON.parse(socket.writes[0] ?? "{}").id,
+      event: "result",
+      op: "fetch",
+      finalUrl: "https://example.com/",
+      name: "page.html",
+      contentType: "text/html",
+      bytes: 1,
+    });
+    await fetch;
+
+    expect(socket.holdsProcess).toBe(false);
     expect(socket.destroyed).toBe(false);
   });
 

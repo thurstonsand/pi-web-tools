@@ -12,21 +12,23 @@ export function createLocalFetcher(client: FetchWorkerClient, extractor: Extract
     const slug = slugify(url) || "document";
     const downloadDir = path.join(artifactDir, slug);
     const result = await client.fetch(url, downloadDir);
+    const file = path.join(downloadDir, result.name);
     if (isHtmlContentType(result.contentType)) {
-      return buildPageDocument(url, artifactDir, result);
+      return buildPageDocument(url, artifactDir, file, result);
     }
-    return buildFileDocument(url, slug, result);
+    return buildFileDocument(url, file, result);
   }
 
   async function buildPageDocument(
     url: string,
     artifactDir: string,
+    file: string,
     result: WorkerFetchResult,
   ): Promise<FetchedDocument> {
-    const markdown = (await extractor.extractToMarkdown(result.file, url)).trim();
+    const markdown = (await extractor.extractToMarkdown(file, url)).trim();
     if (!markdown) throw new Error(`${extractor.name} extracted no content`);
     const body = await writeDocumentBody(artifactDir, url, "content.md", `${markdown}\n`);
-    await unlink(result.file);
+    await unlink(file);
     return {
       kind: "local.page",
       source: "local",
@@ -41,18 +43,17 @@ export function createLocalFetcher(client: FetchWorkerClient, extractor: Extract
 
   function buildFileDocument(
     url: string,
-    slug: string,
+    file: string,
     result: WorkerFetchResult,
   ): FetchedDocument {
-    const name = path.basename(result.file);
     return {
       kind: "local.file",
       source: "local",
       url,
       ...(result.finalUrl !== url ? { link: result.finalUrl } : {}),
-      title: name,
+      title: result.name,
       facts: [result.contentType, formatSize(result.bytes)],
-      bodies: [{ name, path: path.join(slug, name), lines: 0, bytes: result.bytes }],
+      bodies: [{ name: result.name, path: file, lines: 0, bytes: result.bytes }],
     };
   }
 

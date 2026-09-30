@@ -139,7 +139,7 @@ export function createFetchWorkerClient(getSettings: () => FetchSettings): Fetch
     if (request.deadline) return;
     request.deadline = setTimeout(() => {
       pending.delete(id);
-      resetStallTimer();
+      onPendingChanged();
       // Deadline expiry means the worker failed to enforce its own stage
       // timeouts — it is wedged, not slow, and it would stall every later
       // request too; put it down so the next fetch respawns clean.
@@ -150,11 +150,19 @@ export function createFetchWorkerClient(getSettings: () => FetchSettings): Fetch
 
   let stallTimer: NodeJS.Timeout | null = null;
 
-  function resetStallTimer(): void {
+  function onPendingChanged(): void {
     if (stallTimer) clearTimeout(stallTimer);
     stallTimer = null;
+    holdProcessWhilePending();
     if (pending.size === 0) return;
     stallTimer = setTimeout(() => void terminateWorker(), STALL_SILENCE_MS);
+  }
+
+  // The connection to the detached worker is kept across fetches; idle, it must
+  // not keep the host alive, or `pi -p` never exits after a local fetch.
+  function holdProcessWhilePending(): void {
+    if (pending.size > 0) sock?.ref();
+    else sock?.unref();
   }
 
   function attachReader(socket: Socket): void {
@@ -166,7 +174,7 @@ export function createFetchWorkerClient(getSettings: () => FetchSettings): Fetch
       } catch {
         return;
       }
-      resetStallTimer();
+      onPendingChanged();
       if (event.event === "heartbeat") return;
       const request = pending.get(event.id);
       if (!request) return;
@@ -177,7 +185,7 @@ export function createFetchWorkerClient(getSettings: () => FetchSettings): Fetch
         return;
       }
       pending.delete(event.id);
-      resetStallTimer();
+      onPendingChanged();
       if (request.deadline) clearTimeout(request.deadline);
       request.resolve(event);
     });
@@ -189,7 +197,7 @@ export function createFetchWorkerClient(getSettings: () => FetchSettings): Fetch
       request.reject(error);
     }
     pending.clear();
-    resetStallTimer();
+    onPendingChanged();
   }
 
   async function ensureConnected(): Promise<Socket> {
@@ -235,6 +243,7 @@ export function createFetchWorkerClient(getSettings: () => FetchSettings): Fetch
     }
 
     sock = socket;
+    holdProcessWhilePending();
     attachReader(socket);
     return socket;
   }
@@ -264,7 +273,7 @@ export function createFetchWorkerClient(getSettings: () => FetchSettings): Fetch
     return new Promise((resolve, reject) => {
       const request: PendingRequest = { resolve, reject, deadline: null };
       pending.set(payload.id, request);
-      resetStallTimer();
+      onPendingChanged();
       // Only fetch ops queue; anything else starts immediately, so arm now.
       if (payload.op !== "fetch") armDeadline(payload.id, request, REQUEST_DEADLINE_BASE_MS);
       socket.write(`${JSON.stringify(payload)}\n`);

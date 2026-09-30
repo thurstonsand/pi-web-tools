@@ -41,7 +41,9 @@ describe("web_fetch structured content", () => {
               title: "OK",
               facts: ["1 body"],
               excerpt: undefined,
-              bodies: [{ name: "page.md", path: "ok/page.md", lines: 3, bytes: 42 }],
+              bodies: [
+                { name: "page.md", path: "/tmp/pi-fetch/run/ok/page.md", lines: 3, bytes: 42 },
+              ],
             })),
             failures: [],
             warnings: [{ message: "slow" }],
@@ -71,7 +73,7 @@ describe("web_fetch structured content", () => {
           bodies: [
             {
               name: "page.md",
-              path: expect.stringMatching(/^\/.+\/ok\/page\.md$/),
+              path: "/tmp/pi-fetch/run/ok/page.md",
               lines: 3,
               bytes: 42,
             },

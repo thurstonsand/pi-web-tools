@@ -1,6 +1,7 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { type Static, Type } from "typebox";
+import type { FetchWarning } from "./contract.ts";
 import {
   buildSearchSummary,
   clampMaxResults,
@@ -8,6 +9,8 @@ import {
   DEFAULT_SEARCH_MODE,
   normalizeSearchQueries,
   type ParallelClientFactory,
+  type ParallelSearchHit,
+  parseParallelSearchResponse,
   validateAfterDate,
 } from "./fetchers/parallel.ts";
 import {
@@ -19,23 +22,11 @@ import {
   updateToolTiming,
 } from "./shared.ts";
 
-type SearchResultItem = {
-  url: string;
-  title?: string | null;
-  publish_date?: string | null;
-  excerpts?: string[] | null;
-};
-
-type SearchWarning = {
-  message?: string | null;
-  type?: string | null;
-};
-
 type WebSearchDetails = {
   objective?: string;
   count?: number;
-  results?: SearchResultItem[];
-  warnings?: SearchWarning[] | null;
+  results?: ParallelSearchHit[];
+  warnings?: FetchWarning[];
 };
 
 type RenderableToolResult<TDetails> = {
@@ -71,18 +62,16 @@ const webSearchParameters = Type.Object({
   ),
 });
 
-const nullableString = Type.Union([Type.String(), Type.Null()]);
-
 const webSearchOutput = Type.Object({
   results: Type.Array(
     Type.Object({
       url: Type.String(),
-      title: nullableString,
-      publish_date: nullableString,
+      title: Type.Optional(Type.String()),
+      publish_date: Type.Optional(Type.String()),
       excerpts: Type.Array(Type.String()),
     }),
   ),
-  warnings: Type.Array(Type.Object({ message: nullableString, type: nullableString })),
+  warnings: Type.Array(Type.Object({ message: Type.String(), type: Type.Optional(Type.String()) })),
 });
 
 export function createWebSearchTool(createClient: ParallelClientFactory) {
@@ -106,7 +95,7 @@ export function createWebSearchTool(createClient: ParallelClientFactory) {
       try {
         const afterDate = validateAfterDate(params.after_date);
         const client = await createClient(signal);
-        const result = await client.search({
+        const response = await client.search({
           objective: params.objective,
           search_queries: searchQueries,
           mode: DEFAULT_SEARCH_MODE,
@@ -116,10 +105,8 @@ export function createWebSearchTool(createClient: ParallelClientFactory) {
           },
         });
 
-        const results = Array.isArray(result.results) ? (result.results as SearchResultItem[]) : [];
-        const warnings = Array.isArray(result.warnings)
-          ? (result.warnings as SearchWarning[])
-          : null;
+        const { results, warnings } = parseParallelSearchResponse(response);
+        const structuredContent: Static<typeof webSearchOutput> = { results, warnings };
         return {
           content: [{ type: "text", text: buildSearchSummary(results, warnings) }],
           details: {
@@ -128,18 +115,7 @@ export function createWebSearchTool(createClient: ParallelClientFactory) {
             results,
             warnings,
           } satisfies WebSearchDetails,
-          structuredContent: {
-            results: results.map((item) => ({
-              url: item.url,
-              title: item.title ?? null,
-              publish_date: item.publish_date ?? null,
-              excerpts: item.excerpts ?? [],
-            })),
-            warnings: (warnings ?? []).map((warning) => ({
-              message: warning.message ?? null,
-              type: warning.type ?? null,
-            })),
-          } satisfies Static<typeof webSearchOutput>,
+          structuredContent,
         };
       } catch (error) {
         throw new Error(`Parallel search failed: ${getErrorMessage(error)}`);

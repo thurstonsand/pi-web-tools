@@ -18,7 +18,7 @@ export function deliverFetchResults(result: RoutedFetchResult): DeliveryResult {
 
   for (const [index, outcome] of resolved.entries()) {
     if (outcome.document) {
-      sections.push(renderDocument(index, outcome.document, result.artifactRoot));
+      sections.push(renderDocument(index, outcome.document));
     }
   }
 
@@ -38,14 +38,14 @@ export function deliverFetchResults(result: RoutedFetchResult): DeliveryResult {
   };
 }
 
-function renderDocument(index: number, document: FetchedDocument, artifactRoot: string): string {
+function renderDocument(index: number, document: FetchedDocument): string {
   const lines = [`${index + 1}. ${document.title}`];
   if (document.facts.length > 0) lines.push(`   ${document.facts.join(" · ")}`);
   lines.push(`   ${document.link ?? document.url}`);
 
   const firstBody = document.bodies[0];
   if (firstBody) {
-    lines.push(`   bodies (in ${path.join(artifactRoot, path.dirname(firstBody.path))}/):`);
+    lines.push(`   bodies (in ${path.dirname(firstBody.path)}/):`);
     for (const body of document.bodies) {
       lines.push(
         `   - ${body.name} (${body.lines.toLocaleString()} lines, ${formatSize(body.bytes)})`,

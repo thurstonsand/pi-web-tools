@@ -7,7 +7,7 @@ export type FetchWarning = {
 
 export interface DocumentBody {
   name: string;
-  path: string; // relative to the call's artifact root; fetchers cannot address outside it
+  path: string; // absolute, under the call's artifact directory
   lines: number;
   bytes: number;
 }
@@ -63,5 +63,4 @@ export interface UrlOutcome {
 export interface RoutedFetchResult {
   outcomes: UrlOutcome[];
   warnings: FetchWarning[];
-  artifactRoot: string;
 }

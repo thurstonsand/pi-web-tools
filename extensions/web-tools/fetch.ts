@@ -1,4 +1,3 @@
-import path from "node:path";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { type Static, Type } from "typebox";
@@ -16,7 +15,6 @@ import {
 
 type WebFetchDetails = {
   count?: number;
-  artifactRoot?: string;
   outcomes?: UrlOutcome[];
   resolved?: UrlOutcome[];
   failed?: UrlOutcome[];
@@ -91,12 +89,7 @@ function toStructuredContent(result: RoutedFetchResult): Static<typeof webFetchO
               facts: document.facts,
               ...(document.excerpt ? { excerpt: document.excerpt } : {}),
               ...(document.highlights ? { highlights: document.highlights } : {}),
-              bodies: document.bodies.map((body) => ({
-                name: body.name,
-                path: path.join(result.artifactRoot, body.path),
-                lines: body.lines,
-                bytes: body.bytes,
-              })),
+              bodies: document.bodies,
             },
           ]
         : [],
@@ -143,7 +136,6 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
           content: [{ type: "text", text: delivery.text }],
           details: {
             count: delivery.resolved.length,
-            artifactRoot: result.artifactRoot,
             outcomes: result.outcomes,
             resolved: delivery.resolved,
             failed: delivery.failed,
@@ -215,10 +207,7 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
           if (expanded) {
             text += `\n${theme.fg("muted", `   ${document.title}`)}`;
             for (const body of document.bodies) {
-              const location = details.artifactRoot
-                ? `${details.artifactRoot}/${body.path}`
-                : body.path;
-              text += `\n${theme.fg("dim", `   ${location}`)}`;
+              text += `\n${theme.fg("dim", `   ${body.path}`)}`;
             }
           }
           continue;

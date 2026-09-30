@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { DocumentBody } from "./contract.ts";
+import type { DocumentBody, FetchWarning } from "./contract.ts";
 
 export const TMP_DIR = "/tmp/pi-fetch";
 
@@ -51,14 +51,12 @@ export function summarizeExcerpt(text: string | undefined, maxLength = 220): str
   return `${normalized.slice(0, maxLength - 1)}…`;
 }
 
-export function formatWarnings(
-  warnings: Array<{ message?: string | null; type?: string | null }> | undefined | null,
-): string[] {
+export function formatWarnings(warnings: FetchWarning[] | undefined | null): string[] {
   if (!warnings?.length) return [];
   return warnings
     .map((warning) => {
       const type = warning.type ? `[${warning.type}] ` : "";
-      const message = warning.message?.trim();
+      const message = warning.message.trim();
       return message ? `${type}${message}` : undefined;
     })
     .filter((warning): warning is string => Boolean(warning));
@@ -79,13 +77,12 @@ export async function writeDocumentBody(
   name: string,
   content: string | Buffer,
 ): Promise<DocumentBody> {
-  const relativePath = path.join(slugify(url) || "document", safeArtifactName(name));
-  const filePath = path.join(artifactDir, relativePath);
+  const filePath = path.join(artifactDir, slugify(url) || "document", safeArtifactName(name));
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, content);
   return {
     name,
-    path: relativePath,
+    path: filePath,
     lines: countLines(content),
     bytes: Buffer.isBuffer(content) ? content.byteLength : Buffer.byteLength(content, "utf8"),
   };

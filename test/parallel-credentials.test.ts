@@ -24,7 +24,7 @@ function configure(apiKeyCommand: unknown) {
 function fakeParallel() {
   const search = vi.fn().mockResolvedValue({ results: [] });
   const construct = vi.fn();
-  const extract = vi.fn().mockResolvedValue({ results: [] });
+  const extract = vi.fn().mockResolvedValue({ results: [], errors: [] });
   const Parallel = class {
     search = search;
     extract = extract;

@@ -66,5 +66,5 @@ export async function fetchDocuments(
     return outcome ? [outcome] : [];
   });
 
-  return { outcomes, warnings, artifactRoot };
+  return { outcomes, warnings };
 }

@@ -192,10 +192,10 @@ async function fetchWithPage(
     const html = await capturePageHtml(page);
     const bytes = Buffer.byteLength(html, "utf8");
     assertWithinCap(bytes);
-    const file = path.join(downloadDir, "page.html");
-    await writeFile(file, html);
+    const name = "page.html";
+    await writeFile(path.join(downloadDir, name), html);
     const title = (await page.title()).trim();
-    return { finalUrl, file, contentType, bytes, ...(title ? { title } : {}) };
+    return { finalUrl, name, contentType, bytes, ...(title ? { title } : {}) };
   }
 
   // The rendered page for a non-HTML response is Chrome's viewer shim (e.g.
@@ -208,11 +208,11 @@ async function fetchWithPage(
   const body = await apiResponse.body();
   assertWithinCap(body.byteLength);
   const headers = apiResponse.headers();
-  const file = path.join(downloadDir, payloadFilename(headers["content-disposition"], finalUrl));
-  await writeFile(file, body);
+  const name = payloadFilename(headers["content-disposition"], finalUrl);
+  await writeFile(path.join(downloadDir, name), body);
   return {
     finalUrl,
-    file,
+    name,
     contentType: headers["content-type"] ?? contentType,
     bytes: body.byteLength,
   };
@@ -285,7 +285,8 @@ async function capturePageHtml(page: Page): Promise<string> {
 }
 
 async function saveDownload(download: Download, downloadDir: string): Promise<WorkerFetchResult> {
-  const file = path.join(downloadDir, sanitizeFilename(download.suggestedFilename()));
+  const name = sanitizeFilename(download.suggestedFilename());
+  const file = path.join(downloadDir, name);
   await download.saveAs(file);
   const { size } = await stat(file);
   if (size > MAX_PAYLOAD_BYTES) {
@@ -294,7 +295,7 @@ async function saveDownload(download: Download, downloadDir: string): Promise<Wo
   }
   return {
     finalUrl: download.url(),
-    file,
+    name,
     contentType: "application/octet-stream",
     bytes: size,
   };
