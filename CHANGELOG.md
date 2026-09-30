@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.0
+
+Targets pi 0.99.1.
+
+### Added
+
+- `web_fetch` and `web_search` declare read-only tool annotations and an output schema, and return matching `structuredContent` alongside the text digest.
+
+### Changed
+
+- Document body paths in tool details are absolute.
+- Validate Parallel search and extract responses at the edge, so malformed responses fail with a clear error.
+
+### Fixed
+
+- `pi -p` exits on its own after a local browser fetch instead of hanging on the idle fetch worker connection.
+
 ## 0.3.0
 
 ### Added
