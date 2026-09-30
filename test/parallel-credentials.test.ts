@@ -2,6 +2,7 @@ import { inspect } from "node:util";
 import {
   type ExtensionAPI,
   type ExtensionContext,
+  type ExtensionToolContext,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -184,7 +185,7 @@ describe("Parallel API key command", () => {
         { objective: "test", after_date: "invalid" },
         undefined,
         undefined,
-        {} as ExtensionContext,
+        {} as ExtensionToolContext,
       ),
     ).rejects.toThrow("Invalid after_date");
     expect(createClient).not.toHaveBeenCalled();

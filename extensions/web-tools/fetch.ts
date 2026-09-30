@@ -1,7 +1,8 @@
+import path from "node:path";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { Type } from "typebox";
-import type { FetchWarning, UrlOutcome, WebFetcher } from "./contract.ts";
+import { type Static, Type } from "typebox";
+import type { FetchWarning, RoutedFetchResult, UrlOutcome, WebFetcher } from "./contract.ts";
 import { deliverFetchResults } from "./delivery.ts";
 import { fetchDocuments } from "./router.ts";
 import {
@@ -46,6 +47,70 @@ const webFetchParameters = Type.Object({
   ),
 });
 
+const webFetchOutput = Type.Object({
+  documents: Type.Array(
+    Type.Object({
+      url: Type.String(),
+      link: Type.Optional(Type.String()),
+      kind: Type.String(),
+      source: Type.String(),
+      title: Type.String(),
+      facts: Type.Array(Type.String()),
+      excerpt: Type.Optional(Type.String()),
+      highlights: Type.Optional(Type.Array(Type.String())),
+      bodies: Type.Array(
+        Type.Object({
+          name: Type.String(),
+          path: Type.String({ description: "Absolute path of the body file." }),
+          lines: Type.Integer(),
+          bytes: Type.Integer(),
+        }),
+      ),
+    }),
+  ),
+  failed: Type.Array(
+    Type.Object({
+      url: Type.String(),
+      attempts: Type.Array(Type.Object({ source: Type.String(), reason: Type.String() })),
+    }),
+  ),
+  warnings: Type.Array(Type.Object({ message: Type.String(), type: Type.Optional(Type.String()) })),
+});
+
+function toStructuredContent(result: RoutedFetchResult): Static<typeof webFetchOutput> {
+  return {
+    documents: result.outcomes.flatMap(({ document }) =>
+      document
+        ? [
+            {
+              url: document.url,
+              ...(document.link ? { link: document.link } : {}),
+              kind: document.kind,
+              source: document.source,
+              title: document.title,
+              facts: document.facts,
+              ...(document.excerpt ? { excerpt: document.excerpt } : {}),
+              ...(document.highlights ? { highlights: document.highlights } : {}),
+              bodies: document.bodies.map((body) => ({
+                name: body.name,
+                path: path.join(result.artifactRoot, body.path),
+                lines: body.lines,
+                bytes: body.bytes,
+              })),
+            },
+          ]
+        : [],
+    ),
+    failed: result.outcomes
+      .filter((outcome) => !outcome.document)
+      .map((outcome) => ({
+        url: outcome.url,
+        attempts: outcome.attempts.map(({ source, reason }) => ({ source, reason })),
+      })),
+    warnings: result.warnings.map(({ message, type }) => (type ? { message, type } : { message })),
+  };
+}
+
 export function createWebFetchTool(fetchers: WebFetcher[]) {
   return defineTool({
     name: "web_fetch",
@@ -58,6 +123,8 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
       "Use web_fetch when you already have a specific URL and need more than search snippets.",
     ],
     parameters: webFetchParameters,
+    outputSchema: webFetchOutput,
+    annotations: { readOnlyHint: true, destructiveHint: false },
     execute: async (_toolCallId, params, signal, onUpdate, ctx) => {
       onUpdate?.({
         content: [
@@ -82,6 +149,7 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
             failed: delivery.failed,
             warnings: result.warnings.length > 0 ? result.warnings : null,
           } satisfies WebFetchDetails,
+          structuredContent: toStructuredContent(result),
         };
       } catch (error) {
         throw new Error(`web_fetch failed: ${getErrorMessage(error)}`);

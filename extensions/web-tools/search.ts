@@ -1,6 +1,6 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { Type } from "typebox";
+import { type Static, Type } from "typebox";
 import {
   buildSearchSummary,
   clampMaxResults,
@@ -71,6 +71,20 @@ const webSearchParameters = Type.Object({
   ),
 });
 
+const nullableString = Type.Union([Type.String(), Type.Null()]);
+
+const webSearchOutput = Type.Object({
+  results: Type.Array(
+    Type.Object({
+      url: Type.String(),
+      title: nullableString,
+      publish_date: nullableString,
+      excerpts: Type.Array(Type.String()),
+    }),
+  ),
+  warnings: Type.Array(Type.Object({ message: nullableString, type: nullableString })),
+});
+
 export function createWebSearchTool(createClient: ParallelClientFactory) {
   return defineTool({
     name: "web_search",
@@ -79,6 +93,8 @@ export function createWebSearchTool(createClient: ParallelClientFactory) {
     promptSnippet: "Search the web for sources and current information",
     promptGuidelines: ["Prefer a focused objective and 1-5 specific queries for web_search."],
     parameters: webSearchParameters,
+    outputSchema: webSearchOutput,
+    annotations: { readOnlyHint: true, destructiveHint: false },
     execute: async (_toolCallId, params, signal, onUpdate) => {
       const searchQueries = normalizeSearchQueries(params.search_queries, params.objective);
 
@@ -112,6 +128,18 @@ export function createWebSearchTool(createClient: ParallelClientFactory) {
             results,
             warnings,
           } satisfies WebSearchDetails,
+          structuredContent: {
+            results: results.map((item) => ({
+              url: item.url,
+              title: item.title ?? null,
+              publish_date: item.publish_date ?? null,
+              excerpts: item.excerpts ?? [],
+            })),
+            warnings: (warnings ?? []).map((warning) => ({
+              message: warning.message ?? null,
+              type: warning.type ?? null,
+            })),
+          } satisfies Static<typeof webSearchOutput>,
         };
       } catch (error) {
         throw new Error(`Parallel search failed: ${getErrorMessage(error)}`);
