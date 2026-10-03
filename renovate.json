@@ -43,6 +43,12 @@
       "groupName": "mise tools"
     },
     {
+      "description": "This repository does not have a mise lockfile to maintain.",
+      "matchManagers": ["mise"],
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "enabled": false
+    },
+    {
       "matchDatasources": ["github-releases"],
       "matchPackageNames": ["jdx/hk"],
       "groupName": "hk",
