@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.1
+
+Targets pi 1.0.4.
+
+### Changed
+
+- Verified against pi 1.0. The extension needed no changes, and the pi peer dependencies remain unpinned.
+
 ## 0.4.0
 
 Targets pi 0.99.1.
