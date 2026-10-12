@@ -148,7 +148,7 @@ export function createWebSearchTool(createClient: ParallelClientFactory) {
     renderResult(result, { expanded, isPartial }, theme, context) {
       const state = context.state as ToolTimingState;
       updateToolTiming(state, isPartial, context.isError, context.invalidate);
-      const duration = formatToolDuration(state);
+      const duration = formatToolDuration(state, context.durationMs);
       const renderedResult = result as RenderableToolResult<WebSearchDetails>;
       if (isPartial) {
         return new Text(`${theme.fg("warning", "Scanning...")} ${theme.fg("dim", duration)}`, 0, 0);

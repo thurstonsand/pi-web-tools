@@ -21,7 +21,7 @@ describe("tool render timing", () => {
 
     startToolTiming(state, true);
     vi.setSystemTime(2_250);
-    expect(formatToolDuration(state)).toBe("1.3s");
+    expect(formatToolDuration(state, undefined)).toBe("1.3s");
   });
 
   it("invalidates once per second while partial", () => {
@@ -49,8 +49,21 @@ describe("tool render timing", () => {
     vi.setSystemTime(8_000);
     vi.advanceTimersByTime(2_000);
 
-    expect(formatToolDuration(state)).toBe("2.4s");
+    expect(formatToolDuration(state, undefined)).toBe("2.4s");
     expect(invalidate).not.toHaveBeenCalled();
     expect(state.interval).toBeUndefined();
+  });
+
+  it("prefers the recorded duration of a final result over the render clock", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const reloaded: ToolTimingState = {};
+    expect(formatToolDuration(reloaded, 3_460)).toBe("3.5s");
+
+    const live: ToolTimingState = {};
+    startToolTiming(live, true);
+    updateToolTiming(live, false, false, vi.fn());
+    vi.setSystemTime(9_000);
+    expect(formatToolDuration(live, 1_200)).toBe("1.2s");
   });
 });

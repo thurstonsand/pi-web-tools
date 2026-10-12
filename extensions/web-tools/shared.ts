@@ -35,7 +35,10 @@ export function updateToolTiming(
   }
 }
 
-export function formatToolDuration(state: ToolTimingState): string {
+// A final result's recorded duration wins: it is monotonic and survives session reloads. The render
+// clock covers live progress and results stored without one, including those from pi before 1.1.
+export function formatToolDuration(state: ToolTimingState, durationMs: number | undefined): string {
+  if (durationMs !== undefined) return `${(durationMs / 1000).toFixed(1)}s`;
   if (state.startedAt === undefined) return "0.0s";
   return `${(((state.endedAt ?? Date.now()) - state.startedAt) / 1000).toFixed(1)}s`;
 }

@@ -169,7 +169,7 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
     renderResult(result, { expanded, isPartial }, theme, context) {
       const state = context.state as ToolTimingState;
       updateToolTiming(state, isPartial, context.isError, context.invalidate);
-      const duration = formatToolDuration(state);
+      const duration = formatToolDuration(state, context.durationMs);
       const renderedResult = result as RenderableToolResult<WebFetchDetails>;
       if (isPartial) {
         return new Text(
