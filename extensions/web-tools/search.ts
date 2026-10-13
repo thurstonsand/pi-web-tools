@@ -14,7 +14,8 @@ import {
   validateAfterDate,
 } from "./fetchers/parallel.ts";
 import {
-  formatToolDuration,
+  formatElapsed,
+  formatSeconds,
   formatWarnings,
   getErrorMessage,
   startToolTiming,
@@ -147,22 +148,25 @@ export function createWebSearchTool(createClient: ParallelClientFactory) {
     },
     renderResult(result, { expanded, isPartial }, theme, context) {
       const state = context.state as ToolTimingState;
-      updateToolTiming(state, isPartial, context.isError, context.invalidate);
-      const duration = formatToolDuration(state, context.durationMs);
+      updateToolTiming(state, isPartial, context.invalidate);
       const renderedResult = result as RenderableToolResult<WebSearchDetails>;
       if (isPartial) {
-        return new Text(`${theme.fg("warning", "Scanning...")} ${theme.fg("dim", duration)}`, 0, 0);
+        return new Text(
+          `${theme.fg("warning", "Scanning...")} ${theme.fg("dim", formatElapsed(state))}`,
+          0,
+          0,
+        );
       }
+      const timing =
+        context.durationMs === undefined
+          ? ""
+          : `\n${theme.fg("dim", `Scanned in ${formatSeconds(context.durationMs)}`)}`;
       if (context.isError) {
         const error =
           renderedResult.content[0]?.type === "text"
             ? (renderedResult.content[0].text ?? "Search failed")
             : "Search failed";
-        return new Text(
-          `${theme.fg("error", error)}\n${theme.fg("dim", `Scanned in ${duration}`)}`,
-          0,
-          0,
-        );
+        return new Text(`${theme.fg("error", error)}${timing}`, 0, 0);
       }
 
       const details = (renderedResult.details ?? {}) as WebSearchDetails;
@@ -187,7 +191,7 @@ export function createWebSearchTool(createClient: ParallelClientFactory) {
         text += "\n";
         for (const warning of warningLines) text += `\n${theme.fg("warning", `- ${warning}`)}`;
       }
-      text += `\n${theme.fg("dim", `Scanned in ${duration}`)}`;
+      text += timing;
 
       return new Text(text, 0, 0);
     },

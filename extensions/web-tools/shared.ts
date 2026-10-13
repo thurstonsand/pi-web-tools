@@ -6,41 +6,34 @@ export const TMP_DIR = "/tmp/pi-fetch";
 
 export interface ToolTimingState {
   startedAt?: number;
-  endedAt?: number;
   interval?: ReturnType<typeof setInterval>;
 }
 
 export function startToolTiming(state: ToolTimingState, executionStarted: boolean): void {
-  if (executionStarted && state.startedAt === undefined) {
-    state.startedAt = Date.now();
-    delete state.endedAt;
-  }
+  if (executionStarted) state.startedAt ??= Date.now();
 }
 
+// The render clock only drives the live counter; a final result shows pi's recorded durationMs.
 export function updateToolTiming(
   state: ToolTimingState,
   isPartial: boolean,
-  isError: boolean,
   invalidate: () => void,
 ): void {
-  if (state.startedAt !== undefined && isPartial && !state.interval) {
-    state.interval = setInterval(invalidate, 1000);
+  if (isPartial) {
+    state.interval ??= setInterval(invalidate, 1000);
+    return;
   }
-  if (!isPartial || isError) {
-    state.endedAt ??= Date.now();
-    if (state.interval) {
-      clearInterval(state.interval);
-      delete state.interval;
-    }
-  }
+  clearInterval(state.interval);
+  delete state.interval;
 }
 
-// A final result's recorded duration wins: it is monotonic and survives session reloads. The render
-// clock covers live progress and results stored without one, including those from pi before 1.1.
-export function formatToolDuration(state: ToolTimingState, durationMs: number | undefined): string {
-  if (durationMs !== undefined) return `${(durationMs / 1000).toFixed(1)}s`;
-  if (state.startedAt === undefined) return "0.0s";
-  return `${(((state.endedAt ?? Date.now()) - state.startedAt) / 1000).toFixed(1)}s`;
+export function formatElapsed(state: ToolTimingState): string {
+  if (state.startedAt === undefined) throw new Error("tool timing read before execution started");
+  return formatSeconds(Date.now() - state.startedAt);
+}
+
+export function formatSeconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 export function getErrorMessage(error: unknown): string {

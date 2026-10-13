@@ -1,6 +1,8 @@
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createWebFetchTool } from "../extensions/web-tools/fetch.ts";
 import {
-  formatToolDuration,
+  formatElapsed,
   startToolTiming,
   type ToolTimingState,
   updateToolTiming,
@@ -11,7 +13,7 @@ describe("tool render timing", () => {
     vi.useRealTimers();
   });
 
-  it("starts when execution begins and formats elapsed time", () => {
+  it("counts elapsed time from the start of execution", () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const state: ToolTimingState = {};
@@ -21,49 +23,43 @@ describe("tool render timing", () => {
 
     startToolTiming(state, true);
     vi.setSystemTime(2_250);
-    expect(formatToolDuration(state, undefined)).toBe("1.3s");
+    startToolTiming(state, true);
+    expect(formatElapsed(state)).toBe("1.3s");
   });
 
-  it("invalidates once per second while partial", () => {
+  it("invalidates once per second while partial and stops on the final result", () => {
     vi.useFakeTimers();
     const state: ToolTimingState = {};
     const invalidate = vi.fn();
 
     startToolTiming(state, true);
-    updateToolTiming(state, true, false, invalidate);
+    updateToolTiming(state, true, invalidate);
+    updateToolTiming(state, true, invalidate);
     vi.advanceTimersByTime(2_000);
-
     expect(invalidate).toHaveBeenCalledTimes(2);
-  });
 
-  it("freezes elapsed time and clears its interval when settled", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(1_000);
-    const state: ToolTimingState = {};
-    const invalidate = vi.fn();
-
-    startToolTiming(state, true);
-    updateToolTiming(state, true, false, invalidate);
-    vi.setSystemTime(3_400);
-    updateToolTiming(state, false, false, invalidate);
-    vi.setSystemTime(8_000);
+    updateToolTiming(state, false, invalidate);
     vi.advanceTimersByTime(2_000);
-
-    expect(formatToolDuration(state, undefined)).toBe("2.4s");
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledTimes(2);
     expect(state.interval).toBeUndefined();
   });
 
-  it("prefers the recorded duration of a final result over the render clock", () => {
+  it("shows the recorded duration of a final result, not the render clock", () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
-    const reloaded: ToolTimingState = {};
-    expect(formatToolDuration(reloaded, 3_460)).toBe("3.5s");
+    const tool = createWebFetchTool([]);
+    const theme = { fg: (_color: string, text: string) => text } as unknown as Theme;
+    const state: ToolTimingState = {};
+    startToolTiming(state, true);
+    vi.setSystemTime(60_000);
 
-    const live: ToolTimingState = {};
-    startToolTiming(live, true);
-    updateToolTiming(live, false, false, vi.fn());
-    vi.setSystemTime(9_000);
-    expect(formatToolDuration(live, 1_200)).toBe("1.2s");
+    const component = tool.renderResult?.(
+      { content: [{ type: "text", text: "boom" }], details: undefined },
+      { expanded: false, isPartial: false },
+      theme,
+      { state, isError: true, durationMs: 3_460, invalidate: vi.fn() } as never,
+    );
+
+    expect(component?.render(80).join("\n")).toContain("Extracted in 3.5s");
   });
 });

@@ -5,7 +5,8 @@ import type { FetchWarning, RoutedFetchResult, UrlOutcome, WebFetcher } from "./
 import { deliverFetchResults } from "./delivery.ts";
 import { fetchDocuments } from "./router.ts";
 import {
-  formatToolDuration,
+  formatElapsed,
+  formatSeconds,
   formatWarnings,
   getErrorMessage,
   startToolTiming,
@@ -168,26 +169,25 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
     },
     renderResult(result, { expanded, isPartial }, theme, context) {
       const state = context.state as ToolTimingState;
-      updateToolTiming(state, isPartial, context.isError, context.invalidate);
-      const duration = formatToolDuration(state, context.durationMs);
+      updateToolTiming(state, isPartial, context.invalidate);
       const renderedResult = result as RenderableToolResult<WebFetchDetails>;
       if (isPartial) {
         return new Text(
-          `${theme.fg("warning", "Extracting...")} ${theme.fg("dim", duration)}`,
+          `${theme.fg("warning", "Extracting...")} ${theme.fg("dim", formatElapsed(state))}`,
           0,
           0,
         );
       }
+      const timing =
+        context.durationMs === undefined
+          ? ""
+          : `\n${theme.fg("dim", `Extracted in ${formatSeconds(context.durationMs)}`)}`;
       if (context.isError) {
         const error =
           renderedResult.content[0]?.type === "text"
             ? (renderedResult.content[0].text ?? "Fetch failed")
             : "Fetch failed";
-        return new Text(
-          `${theme.fg("error", error)}\n${theme.fg("dim", `Extracted in ${duration}`)}`,
-          0,
-          0,
-        );
+        return new Text(`${theme.fg("error", error)}${timing}`, 0, 0);
       }
 
       const details = (renderedResult.details ?? {}) as WebFetchDetails;
@@ -224,7 +224,7 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
           for (const warning of warningLines) text += `\n${theme.fg("warning", `- ${warning}`)}`;
         }
       }
-      text += `\n${theme.fg("dim", `Extracted in ${duration}`)}`;
+      text += timing;
 
       return new Text(text, 0, 0);
     },
