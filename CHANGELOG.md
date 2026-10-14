@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.2
+
+Targets pi 1.2.0.
+
+### Changed
+
+- Requires pi 1.1 or newer. Finished `web_fetch` and `web_search` results show the duration pi records for the call; calls pi rejects before they run, such as those with invalid arguments, show no duration.
+- `web_fetch` and `web_search` rows time themselves like pi's own tool rows: `Elapsed` while running, `Took` once finished, and durations of a minute or more read as `1m 30s`.
+
+### Fixed
+
+- `web_fetch` and `web_search` show the tool's recorded duration after a session is reloaded, instead of `0.0s`.
+
 ## 0.4.1
 
 Targets pi 1.0.4.
