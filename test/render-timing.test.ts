@@ -24,7 +24,7 @@ describe("tool render timing", () => {
     startToolTiming(state, true);
     vi.setSystemTime(2_250);
     startToolTiming(state, true);
-    expect(formatElapsed(state)).toBe("1.3s");
+    expect(formatElapsed(state)).toBe("Elapsed 1.3s");
   });
 
   it("invalidates once per second while partial and stops on the final result", () => {
@@ -53,13 +53,19 @@ describe("tool render timing", () => {
     startToolTiming(state, true);
     vi.setSystemTime(60_000);
 
-    const component = tool.renderResult?.(
-      { content: [{ type: "text", text: "boom" }], details: undefined },
-      { expanded: false, isPartial: false },
-      theme,
-      { state, isError: true, durationMs: 3_460, invalidate: vi.fn() } as never,
-    );
+    const render = (durationMs: number) =>
+      tool
+        .renderResult?.(
+          { content: [{ type: "text", text: "boom" }], details: undefined },
+          { expanded: false, isPartial: false },
+          theme,
+          { state, isError: true, durationMs, invalidate: vi.fn() } as never,
+        )
+        .render(80)
+        .join("\n");
 
-    expect(component?.render(80).join("\n")).toContain("Extracted in 3.5s");
+    expect(render(3_460)).toContain("Took 3.5s");
+    expect(render(90_400)).toContain("Took 1m 30s");
+    expect(render(3_723_000)).toContain("Took 1h 2m 3s");
   });
 });

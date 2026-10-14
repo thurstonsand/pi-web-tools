@@ -29,11 +29,22 @@ export function updateToolTiming(
 
 export function formatElapsed(state: ToolTimingState): string {
   if (state.startedAt === undefined) throw new Error("tool timing read before execution started");
-  return formatSeconds(Date.now() - state.startedAt);
+  return `Elapsed ${formatToolDuration(Date.now() - state.startedAt)}`;
 }
 
-export function formatSeconds(ms: number): string {
-  return `${(ms / 1000).toFixed(1)}s`;
+export function formatTook(durationMs: number): string {
+  return `Took ${formatToolDuration(durationMs)}`;
+}
+
+// Mirrors pi's own tool rows, whose formatter is not exported.
+function formatToolDuration(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const totalSeconds = Math.floor(seconds);
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainder = totalSeconds % 60;
+  if (minutes < 60) return `${minutes}m ${remainder}s`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m ${remainder}s`;
 }
 
 export function getErrorMessage(error: unknown): string {

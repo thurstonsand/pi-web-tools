@@ -15,7 +15,7 @@ import {
 } from "./fetchers/parallel.ts";
 import {
   formatElapsed,
-  formatSeconds,
+  formatTook,
   formatWarnings,
   getErrorMessage,
   startToolTiming,
@@ -160,7 +160,7 @@ export function createWebSearchTool(createClient: ParallelClientFactory) {
       const timing =
         context.durationMs === undefined
           ? ""
-          : `\n${theme.fg("dim", `Scanned in ${formatSeconds(context.durationMs)}`)}`;
+          : `\n${theme.fg("dim", formatTook(context.durationMs))}`;
       if (context.isError) {
         const error =
           renderedResult.content[0]?.type === "text"

@@ -6,7 +6,7 @@ import { deliverFetchResults } from "./delivery.ts";
 import { fetchDocuments } from "./router.ts";
 import {
   formatElapsed,
-  formatSeconds,
+  formatTook,
   formatWarnings,
   getErrorMessage,
   startToolTiming,
@@ -181,7 +181,7 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
       const timing =
         context.durationMs === undefined
           ? ""
-          : `\n${theme.fg("dim", `Extracted in ${formatSeconds(context.durationMs)}`)}`;
+          : `\n${theme.fg("dim", formatTook(context.durationMs))}`;
       if (context.isError) {
         const error =
           renderedResult.content[0]?.type === "text"
