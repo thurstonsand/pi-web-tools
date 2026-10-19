@@ -64,6 +64,11 @@
       "description": "@types/node describes the runtime, so it tracks the Node these packages run on rather than the newest DefinitelyTyped release. Types from a later major describe APIs that are not there and hide ones that were removed, and tsc believes them either way. Raise the ceiling when the toolchain in mise.toml moves.",
       "matchPackageNames": ["@types/node"],
       "allowedVersions": "<25"
+    },
+    {
+      "description": "Pi updates raise the package.json floors, not only the lockfile, so the declared ranges never claim support for a pi older than the one we test against.",
+      "matchPackageNames": ["@earendil-works/**"],
+      "rangeStrategy": "bump"
     }
   ]
 }
