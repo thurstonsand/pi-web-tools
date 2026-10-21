@@ -10,6 +10,8 @@
   "dependencyDashboard": true,
   "timezone": "America/New_York",
   "labels": ["dependencies"],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["at any time"]
@@ -69,6 +71,11 @@
       "description": "Pi updates raise the package.json floors, not only the lockfile, so the declared ranges never claim support for a pi older than the one we test against.",
       "matchPackageNames": ["@earendil-works/**"],
       "rangeStrategy": "bump"
+    },
+    {
+      "description": "Pi is the host this package tests against, so its releases are taken as soon as they publish rather than waiting out the release-age gate.",
+      "matchPackageNames": ["@earendil-works/**"],
+      "minimumReleaseAge": null
     }
   ]
 }
