@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.3
+
+Targets pi 1.4.0.
+
+### Added
+
+- `web_fetch` URLs and `web_search` result titles are clickable links in terminals that support hyperlinks.
+
+### Fixed
+
+- `web_fetch` reads GitHub pull request listings filtered by `is:merged` or `is:unmerged` through the GitHub API again, instead of falling back to the scraped page.
+
 ## 0.4.2
 
 Targets pi 1.2.0.
