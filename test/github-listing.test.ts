@@ -24,9 +24,9 @@ describe("buildListQuery", () => {
     );
   });
 
-  it("treats merged qualifiers as PR-implying", () => {
+  it("adds the type qualifier to merged queries, which GitHub no longer reads as PR-only", () => {
     expect(buildListQuery({ ...base, tab: "pulls", q: "is:merged sort:created-asc" })).toBe(
-      "repo:owner/repo is:merged sort:created-asc",
+      "repo:owner/repo is:pr is:merged sort:created-asc",
     );
   });
 });

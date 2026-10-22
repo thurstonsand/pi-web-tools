@@ -92,7 +92,7 @@ export function buildListQuery(target: ListTarget): string {
 }
 
 function hasTypeQualifier(query: string): boolean {
-  return /(?:^|\s)(?:is:(?:issue|pr|merged|unmerged)|type:(?:issue|pr))(?:\s|$)/i.test(query);
+  return /(?:^|\s)(?:is:(?:issue|pr)|type:(?:issue|pr))(?:\s|$)/i.test(query);
 }
 
 function isPresent(value: string | undefined): value is string {
