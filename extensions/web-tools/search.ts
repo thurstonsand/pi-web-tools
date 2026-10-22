@@ -18,6 +18,7 @@ import {
   formatTook,
   formatWarnings,
   getErrorMessage,
+  linkUrl,
   startToolTiming,
   type ToolTimingState,
   updateToolTiming,
@@ -183,7 +184,7 @@ export function createWebSearchTool(createClient: ParallelClientFactory) {
 
       for (const [index, item] of details.results?.entries() ?? []) {
         const title = item.title?.trim() || item.url;
-        text += `\n${theme.fg("accent", `${index + 1}. ${title}`)}`;
+        text += `\n${linkUrl(theme.fg("accent", `${index + 1}. ${title}`), item.url)}`;
         if (expanded) text += `\n${theme.fg("dim", `   ${item.url}`)}`;
       }
 

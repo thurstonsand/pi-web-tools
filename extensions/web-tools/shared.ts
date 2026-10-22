@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { getCapabilities, hyperlink } from "@earendil-works/pi-tui";
 import type { DocumentBody, FetchWarning } from "./contract.ts";
 
 export const TMP_DIR = "/tmp/pi-fetch";
@@ -45,6 +46,10 @@ function formatToolDuration(ms: number): string {
   const remainder = totalSeconds % 60;
   if (minutes < 60) return `${minutes}m ${remainder}s`;
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m ${remainder}s`;
+}
+
+export function linkUrl(styledText: string, url: string): string {
+  return getCapabilities().hyperlinks ? hyperlink(styledText, url) : styledText;
 }
 
 export function getErrorMessage(error: unknown): string {

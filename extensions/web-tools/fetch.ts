@@ -9,6 +9,7 @@ import {
   formatTook,
   formatWarnings,
   getErrorMessage,
+  linkUrl,
   startToolTiming,
   type ToolTimingState,
   updateToolTiming,
@@ -158,10 +159,10 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
       const urls = args.urls.map((url: string) => url.trim()).filter(Boolean);
       if (context.expanded) {
         for (const [index, url] of urls.entries()) {
-          text += `\n${theme.fg("dim", `${index + 1}.`)} ${theme.fg("accent", url)}`;
+          text += `\n${theme.fg("dim", `${index + 1}.`)} ${linkUrl(theme.fg("accent", url), url)}`;
         }
       } else if (urls[0]) {
-        text += `\n${theme.fg("dim", "1.")} ${theme.fg("accent", urls[0])}`;
+        text += `\n${theme.fg("dim", "1.")} ${linkUrl(theme.fg("accent", urls[0]), urls[0])}`;
         if (urls.length > 1) text += theme.fg("dim", `  [+${urls.length - 1} more]`);
       }
 
@@ -203,7 +204,7 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
       for (const [index, outcome] of outcomes.entries()) {
         const document = outcome.document;
         if (document) {
-          text += `\n${theme.fg("dim", `${index + 1}. [${document.kind}]`)} ${theme.fg("accent", outcome.url)}`;
+          text += `\n${theme.fg("dim", `${index + 1}. [${document.kind}]`)} ${linkUrl(theme.fg("accent", outcome.url), outcome.url)}`;
           if (expanded) {
             text += `\n${theme.fg("muted", `   ${document.title}`)}`;
             for (const body of document.bodies) {
@@ -213,7 +214,7 @@ export function createWebFetchTool(fetchers: WebFetcher[]) {
           continue;
         }
 
-        text += `\n${theme.fg("dim", `${index + 1}.`)} ${theme.fg("error", "[failed]")} ${theme.fg("accent", outcome.url)}`;
+        text += `\n${theme.fg("dim", `${index + 1}.`)} ${theme.fg("error", "[failed]")} ${linkUrl(theme.fg("accent", outcome.url), outcome.url)}`;
         if (expanded) text += `\n${theme.fg("error", `   ${formatAttemptTrail(outcome)}`)}`;
       }
 

@@ -1,7 +1,8 @@
-import type { ExtensionToolContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionToolContext, Theme } from "@earendil-works/pi-coding-agent";
+import { resetCapabilitiesCache, setCapabilities } from "@earendil-works/pi-tui";
 import type ParallelClient from "parallel-web";
 import { Value } from "typebox/value";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWebSearchTool } from "../extensions/web-tools/search.ts";
 
 function toolWithResponse(response: unknown) {
@@ -46,5 +47,36 @@ describe("web_search structured content", () => {
     ).rejects.toThrow(
       "Parallel search failed: Parallel search response: /results/0 must have required properties excerpts",
     );
+  });
+});
+
+describe("web_search result rows", () => {
+  afterEach(() => {
+    resetCapabilitiesCache();
+  });
+
+  const render = () =>
+    toolWithResponse(undefined)
+      .renderResult?.(
+        {
+          content: [],
+          details: { count: 1, results: [{ url: "https://a.example/page", title: "A page" }] },
+        },
+        { expanded: false, isPartial: false },
+        { fg: (_color: string, text: string) => text } as unknown as Theme,
+        { state: {}, isError: false, invalidate: vi.fn() } as never,
+      )
+      .render(80)
+      .join("\n");
+
+  it("links each title to its result when the terminal supports hyperlinks", () => {
+    setCapabilities({ images: null, trueColor: true, hyperlinks: true });
+    expect(render()).toContain("\x1b]8;;https://a.example/page\x1b\\1. A page\x1b]8;;\x1b\\");
+  });
+
+  it("leaves titles as plain text when the terminal does not support hyperlinks", () => {
+    setCapabilities({ images: null, trueColor: true, hyperlinks: false });
+    expect(render()).toContain("1. A page");
+    expect(render()).not.toContain("\x1b]8;;");
   });
 });
