@@ -1,5 +1,7 @@
 # @thurstonsand/pi-web-tools
 
+> **Deprecated.** `web_search` and `web_fetch` now ship in [pi-librarian](https://github.com/thurstonsand/pi-librarian), which grants them to its research runs too. Uninstall this package before installing that one, since both register the same tool names, and move `webTools.*` settings to `librarian.web.*`.
+
 Web access for the [pi](https://github.com/earendil-works/pi) coding agent. This package registers two tools:
 
 - `web_search` — web search with results shaped for agent consumption.
