@@ -17,7 +17,7 @@ The consumer of `web_fetch` output is a coding agent. Its reading tools are line
 Two failure patterns motivate this design:
 
 - **Generic web extraction is the wrong backend for repository content.** A GitHub file, directory, issue, or pull request has a precise API surface. Scraping the HTML page for `github.com/owner/repo/pull/123` yields worse structure at higher cost than three REST calls, and it cannot produce a usable unified diff at all.
-- **Opaque persistence wastes the agent's context.** If fetched content lands on disk as a serialized envelope (JSON-escaped strings, metadata wrappers), the agent pays full token cost to read escape-sequence noise, and grep is useless against it. And content inlined into a tool result is permanent context pollution: a 26KB conversation sits in the window for the rest of the session even if the agent needed one line of it. Observed agent behavior settles the design: agents go back to source files with grep to recall specific details *even when the full document was previously loaded into context* — a stable file is worth more than inlined bytes.
+- **Opaque persistence wastes the agent's context.** If fetched content lands on disk as a serialized envelope (JSON-escaped strings, metadata wrappers), the agent pays full token cost to read escape-sequence noise, and grep is useless against it. And content inlined into a tool result is permanent context pollution: a 26KB conversation sits in the window for the rest of the session even if the agent needed one line of it. Observed agent behavior settles the design: agents go back to source files with grep to recall specific details _even when the full document was previously loaded into context_ — a stable file is worth more than inlined bytes.
 
 Concrete scenario: the agent is asked to review a dependency's pull request. Ideal delivery is the PR conversation rendered as markdown and the diff as a `.patch` file it can grep by filename, plus a digest telling it exactly what exists, how big it is, and what it's about. Anything else (escaped JSON, a paginated HTML scrape, a 400KB diff dumped into context) is overhead on every single fetch for the lifetime of the tool.
 
@@ -114,21 +114,21 @@ A dedicated `contract.ts` module defines the entire cross-module type surface. P
 
 ```ts
 interface FetchedDocument {
-  kind: string;           // "<source>.<shape>", e.g. "github.pull_request", "parallel.page"
+  kind: string; // "<source>.<shape>", e.g. "github.pull_request", "parallel.page"
   source: string;
-  url: string;            // the URL as requested
-  link?: string;          // canonical html link when it differs from url
+  url: string; // the URL as requested
+  link?: string; // canonical html link when it differs from url
   title: string;
-  facts: string[];        // pre-rendered one-line digest facts, provider-authored
-  excerpt?: string;       // provider-authored preview; delivery caps it before rendering
-  highlights?: string[];  // objective-steered answers; rendered in full, never capped
+  facts: string[]; // pre-rendered one-line digest facts, provider-authored
+  excerpt?: string; // provider-authored preview; delivery caps it before rendering
+  highlights?: string[]; // objective-steered answers; rendered in full, never capped
   bodies: DocumentBody[];
 }
 
 interface DocumentBody {
-  name: string;           // artifact filename: "conversation.md", "diff.patch", "index.ts"
-  path: string;           // absolute path — the fetcher already wrote it
-  lines: number;          // 0 for binary
+  name: string; // artifact filename: "conversation.md", "diff.patch", "index.ts"
+  path: string; // absolute path — the fetcher already wrote it
+  lines: number; // 0 for binary
   bytes: number;
 }
 
@@ -138,12 +138,12 @@ interface FetchFailure {
 }
 
 interface FailedAttempt extends FetchFailure {
-  source: string;            // stamped by the router from fetcher.source
+  source: string; // stamped by the router from fetcher.source
 }
 
 interface FetcherResult {
   documents: FetchedDocument[];
-  failures: FetchFailure[];  // resolvable-but-failed; unclaimed URLs are simply absent
+  failures: FetchFailure[]; // resolvable-but-failed; unclaimed URLs are simply absent
   warnings: FetchWarning[];
 }
 
@@ -160,8 +160,8 @@ interface UrlOutcome {
 }
 
 interface RoutedFetchResult {
-  outcomes: UrlOutcome[];    // request order; one entry per requested URL
-  warnings: FetchWarning[];  // fetcher-level diagnostics; surfaced in details only
+  outcomes: UrlOutcome[]; // request order; one entry per requested URL
+  warnings: FetchWarning[]; // fetcher-level diagnostics; surfaced in details only
 }
 ```
 
@@ -197,15 +197,15 @@ Bodies are plain files in their native format. There is no JSON wrapper, no meta
 
 `canFetch` claims hosts `github.com`, `raw.githubusercontent.com`, and `api.github.com`. Internal resolvers by URL shape:
 
-| Shape | Resolution |
-| --- | --- |
-| `github.com/{owner}/{repo}` | README via `repos.getReadme` |
-| `github.com/{owner}/{repo}/blob\|raw/{ref}/{path}` | file via `repos.getContent` |
-| `raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}` | file |
-| `api.github.com/repos/{owner}/{repo}/contents/{path}?ref=` | file |
-| `github.com/{owner}/{repo}/tree/{ref}/{path}` | directory listing |
-| `github.com/{owner}/{repo}/issues/{n}` | issue + comments |
-| `github.com/{owner}/{repo}/pull/{n}` | PR + comments + reviews + review comments + files/patches |
+| Shape                                                      | Resolution                                                |
+| ---------------------------------------------------------- | --------------------------------------------------------- |
+| `github.com/{owner}/{repo}`                                | README via `repos.getReadme`                              |
+| `github.com/{owner}/{repo}/blob\|raw/{ref}/{path}`         | file via `repos.getContent`                               |
+| `raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}`    | file                                                      |
+| `api.github.com/repos/{owner}/{repo}/contents/{path}?ref=` | file                                                      |
+| `github.com/{owner}/{repo}/tree/{ref}/{path}`              | directory listing                                         |
+| `github.com/{owner}/{repo}/issues/{n}`                     | issue + comments                                          |
+| `github.com/{owner}/{repo}/pull/{n}`                       | PR + comments + reviews + review comments + files/patches |
 
 Refs containing slashes make `{ref}/{path}` splits ambiguous in `blob`/`tree`/`raw` URLs. Resolution probes candidate splits longest-path-first via `repos.getContent` until one matches the expected type (file vs directory). Unresolvable URLs become unhandled and cascade to Parallel.
 
@@ -239,7 +239,7 @@ Client: `@octokit/rest`, `userAgent: "pi-parallel-web-tools"`, constructed lazil
 
 ### 7. Parallel fetcher: terminal fallback, native objective steering
 
-Parallel claims every URL and uses its native multi-URL `extract` with `full_content: true`. Results map to `parallel.page` documents with one body, `content.md`; facts carry the publish date. The `objective` tool parameter passes through to Parallel, which tailors excerpts natively — and the presence of an objective changes their delivery class: without one, the first excerpt becomes the document's capped `excerpt`; with one, *all* excerpts become `highlights`, delivered uncapped, because they are the answer the agent asked for. Parallel's per-URL extract errors normalize to failures.
+Parallel claims every URL and uses its native multi-URL `extract` with `full_content: true`. Results map to `parallel.page` documents with one body, `content.md`; facts carry the publish date. The `objective` tool parameter passes through to Parallel, which tailors excerpts natively — and the presence of an objective changes their delivery class: without one, the first excerpt becomes the document's capped `excerpt`; with one, _all_ excerpts become `highlights`, delivered uncapped, because they are the answer the agent asked for. Parallel's per-URL extract errors normalize to failures.
 
 Source-native fetchers ignore `objective` — silently, with no warning noise. Objective-steered processing of source-native results is Phase 3.
 

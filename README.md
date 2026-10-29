@@ -28,7 +28,6 @@ pi -e ./extensions/web-tools.ts
 | Parallel API key | `PARALLEL_API_KEY` or pi global settings | for search |
 | GitHub token     | `GH_TOKEN`, token file, or `gh` CLI      | no         |
 | Fetch browser    | pi global settings                       | no         |
-
 - **Parallel API key** enables `web_search` and the Parallel fetch backend. Set `PARALLEL_API_KEY` or configure a key command `webTools.parallel.apiKeyCommand: "bash command"`. Without either, `web_search` is not registered and fetches fall through to the local browser.
 - **GitHub token** raises rate limits and reaches private repos. Resolved from `GH_TOKEN`, then `~/.pi/agent/github-token`, then `gh auth token`. Public URLs work without it.
 - **Fetch browser** settings live under `webTools.fetch.browser` (`executablePath`, `profileDir`). They point the local browser at a specific Chrome binary and profile, defaulting to a managed profile under `~/.pi/agent/browser-profile`.

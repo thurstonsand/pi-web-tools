@@ -82,7 +82,7 @@ Tooling strictness carried over verbatim: `strict`, `exactOptionalPropertyTypes`
 
 ### 3. `github.ts` decomposed by resolver, renderers colocated
 
-The split follows the doc-01 principle that a source is one fetcher with internal resolvers: `urls.ts` owns `parseGitHubUrl` and target types; `content.ts`, `issue.ts`, `pull-request.ts` each own their resolver *and its markdown rendering* — no grab-bag `render.ts`, because renderers change with their resolver, not with each other. `pagination.ts` holds `listWithCap`. `index.ts` composes the fetcher and dispatches parsed URLs to resolvers. The local browser fetcher's five files get the same treatment under `fetchers/local/`.
+The split follows the doc-01 principle that a source is one fetcher with internal resolvers: `urls.ts` owns `parseGitHubUrl` and target types; `content.ts`, `issue.ts`, `pull-request.ts` each own their resolver _and its markdown rendering_ — no grab-bag `render.ts`, because renderers change with their resolver, not with each other. `pagination.ts` holds `listWithCap`. `index.ts` composes the fetcher and dispatches parsed URLs to resolvers. The local browser fetcher's five files get the same treatment under `fetchers/local/`.
 
 ### 4. Migrated design docs are renumbered and path-corrected, not rewritten
 

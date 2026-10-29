@@ -160,7 +160,7 @@ Escalation policy config is passed at worker spawn, and the whole detect→wait�
 ### Non-focus-stealing escalation window
 
 - **Status:** Open
-- **Open Issue:** The headed escalation window activates Chrome and steals focus. No supported Playwright path launches headed-without-focus; the referenced computer-use projects don't achieve invisibility either (open-codex-computer-use captures *backgrounded but on-screen* windows via ScreenCaptureKit and has explicit focus-stealing recovery paths; its browser sibling uses Chrome extension APIs — `active: false, focused: false` — unavailable to a Playwright launch).
+- **Open Issue:** The headed escalation window activates Chrome and steals focus. No supported Playwright path launches headed-without-focus; the referenced computer-use projects don't achieve invisibility either (open-codex-computer-use captures _backgrounded but on-screen_ windows via ScreenCaptureKit and has explicit focus-stealing recovery paths; its browser sibling uses Chrome extension APIs — `active: false, focused: false` — unavailable to a Playwright launch).
 - **Discussion:** Full invisibility may also be self-defeating: challenge scripts consult visibility and interaction signals, and an occluded window on macOS reports itself hidden. Partial mitigations exist — small window via `--window-size`/`--window-position`, or macOS-side focus restoration to the previous app after launch.
 - **Next step:** Test whether a challenge resolves in an unfocused/backgrounded headed window; if yes, focus restoration is a cheap polish item.
 
@@ -181,7 +181,7 @@ Reference implementations from the eval live outside the repo and inform but do 
   - Validation: smoke-fetch the MDN flatMap page — `content.md` contains the nine code blocks (zero today); a non-shadow page (go.dev blog) is byte-comparable to before. `mise run check`.
 
 - [x] Phase 3: challenge detection and headless wait
-  - Goal: challenged fetches deterministically detected; auto-resolving walls pass; the rest fail actionably. No escalation yet — and no escalation *setting* yet, so nothing half-implemented is exposed.
+  - Goal: challenged fetches deterministically detected; auto-resolving walls pass; the rest fail actionably. No escalation yet — and no escalation _setting_ yet, so nothing half-implemented is exposed.
   - Files: `extensions/web-tools/fetchers/local/fetch-worker.ts`, `worker-protocol.ts` + `worker-connection.ts` (spawn argv), `extensions/web-tools/settings.ts`, `test/settings` coverage if present.
   - Work: read the main-frame response's `cf-mitigated` header; on `challenge`, wait event-driven (title/URL change) up to `headlessWaitSecs`; on expiry fail with the wall-naming `/open-browser` message. Add `webTools.fetch.challenge.headlessWaitSecs` (default 10) and plumb it through spawn argv.
   - Validation: smoke vs npmjs.com → typed failure with actionable reason; healthy-page smoke shows zero added latency; after a manual `/open-browser` visit to npm, the same fetch passes headless (cookie persistence). `mise run check`.

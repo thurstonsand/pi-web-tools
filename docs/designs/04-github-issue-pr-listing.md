@@ -34,12 +34,12 @@ Timing note: GitHub's search migration to "advanced search" completed September 
 
 New URL shapes claimed by the GitHub fetcher:
 
-| URL | Effective query |
-| --- | --- |
-| `/{owner}/{repo}/issues` | `repo:o/r is:issue state:open` |
-| `/{owner}/{repo}/pulls` | `repo:o/r is:pr state:open` |
-| `/{owner}/{repo}/issues?q=label:bug` | `repo:o/r is:issue label:bug` |
-| `/{owner}/{repo}/pulls?q=is:merged` | `repo:o/r is:merged` |
+| URL                                             | Effective query                 |
+| ----------------------------------------------- | ------------------------------- |
+| `/{owner}/{repo}/issues`                        | `repo:o/r is:issue state:open`  |
+| `/{owner}/{repo}/pulls`                         | `repo:o/r is:pr state:open`     |
+| `/{owner}/{repo}/issues?q=label:bug`            | `repo:o/r is:issue label:bug`   |
+| `/{owner}/{repo}/pulls?q=is:merged`             | `repo:o/r is:merged`            |
 | `/{owner}/{repo}/issues?q=is:closed extraction` | `repo:o/r is:closed extraction` |
 
 Also claimed while touching the parser: `/{owner}/{repo}/pulls/{n}` as a single-PR URL (github.com redirects it to `/pull/{n}`).

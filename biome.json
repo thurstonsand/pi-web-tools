@@ -7,8 +7,8 @@
     "lineWidth": 100
   },
   "markdown": {
-    "formatter": {
-      "enabled": false
+    "parser": {
+      "frontmatter": true
     }
   },
   "linter": {
