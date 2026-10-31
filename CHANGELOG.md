@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.4
+
+Deprecated in favour of [pi-librarian](https://github.com/thurstonsand/pi-librarian), which ships `web_search` and `web_fetch` from 0.7.0 and grants them to its research runs too.
+
+### Changed
+
+- Deprecated. Uninstall this package before installing pi-librarian, since both register the same tool names, and move `webTools.*` settings to `librarian.web.*`.
+
 ## 0.4.3
 
 Targets pi 1.4.0.
