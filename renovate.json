@@ -73,6 +73,11 @@
       "description": "Pi is the host this package tests against, so its releases are taken as soon as they publish rather than waiting out the release-age gate.",
       "matchPackageNames": ["@earendil-works/**"],
       "minimumReleaseAge": null
+    },
+    {
+      "description": "biome.json's $schema names the exact Biome release, kept current by customManagers:biomeVersions, so Biome is pinned exactly as its install guide does (npm i -E) and the package, the schema, and any mise pin move in one PR. Last, so it overrides the per-manager groups.",
+      "matchPackageNames": ["@biomejs/biome", "biomejs/biome"],
+      "groupName": "Biome"
     }
   ]
 }
